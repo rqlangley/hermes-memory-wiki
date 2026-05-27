@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 4.1
+**Last updated:** 2026-05-27 after Task 4.2
 
 ## Project
 
@@ -51,6 +51,7 @@ a3f5c7c feat: initialize hermes wiki vault
 496545e fix: ignore unsafe wiki page symlinks
 1f18d13 feat: build wiki keyword search text
 88b157c fix: include wiki body in keyword search text
+fb9d7f4 feat: rank wiki keyword search results
 ```
 
 Completed tasks:
@@ -299,18 +300,50 @@ Review results:
 - Spec compliance: PASS after scoped body-search-text fix
 - Code quality: APPROVED after scoped body-search-text and deterministic-set-order fixes
 
+### Task 4.2 — Implement keyword scoring
+
+Files:
+
+- `src/hermes_memory_wiki/search_keyword.py`
+- `tests/test_keyword_search.py`
+
+Implemented:
+
+- `WikiSearchResult`
+- `score_page(...)`
+- `keyword_search(...)`
+
+Covered behavior:
+
+- exact title matches outrank body-only matches
+- id/path matches boost score
+- claim text matches return matched claim metadata
+- confidence boosts claim score
+- stale/contested claims score lower than fresh active claims
+- body occurrence boost is capped
+- nonmatching pages score zero and are filtered
+
+Review results:
+
+- Spec compliance: PASS
+- Code quality: APPROVED
+
+Non-blocking notes:
+
+- `keyword_search(..., max_results=<negative>)` currently follows Python slicing semantics; consider normalizing or validating non-positive values when result pagination behavior is hardened.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 4.1:
+Latest verification after Task 4.2:
 
 ```bash
 .venv/bin/python -m pytest tests/test_keyword_search.py -q
-# 8 passed
+# 15 passed
 
 .venv/bin/python -m pytest -q
-# 53 passed
+# 60 passed
 ```
 
 ## Approved design summary
@@ -360,7 +393,7 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 4.2 — Implement keyword scoring** from the implementation plan.
+Continue with **Task 4.3 — Add search modes** from the implementation plan.
 
 Files:
 
@@ -369,41 +402,21 @@ Files:
 
 Required TDD test cases:
 
-- exact title match outranks body-only match;
-- id/path match boosts score;
-- claim text match returns matched claim metadata;
-- confidence boosts claim score;
-- stale/contested claims score lower;
-- body occurrence boost is capped;
-- nonmatching pages score zero.
-
-Required API:
-
-```python
-@dataclass
-class WikiSearchResult:
-    corpus: str
-    path: str
-    title: str
-    kind: str
-    score: float
-    snippet: str
-    search_mode: str
-    matched_claim_id: str | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-def score_page(page: WikiPageSummary, query: str, mode: str = "auto") -> float: ...
-def keyword_search(pages: Sequence[WikiPageSummary], query: str, *, max_results: int = 10, mode: str = "auto") -> list[WikiSearchResult]: ...
-```
+- `find-person` boosts person-like pages;
+- `route-question` boosts pages with routing/best-used-for fields;
+- `source-evidence` boosts source pages and evidence matches;
+- `raw-claim` prioritizes pages with matching claims;
+- invalid mode raises or defaults predictably.
 
 Reference only:
 
-- OpenClaw `cli-Cx8TeRn1.js:1632-1918`
+- OpenClaw `cli-Cx8TeRn1.js:1725-1764`
+- OpenClaw `cli-Cx8TeRn1.js:1766-1799`
 
 Expected commit message:
 
 ```text
-feat: rank wiki keyword search results
+feat: add wiki keyword search modes
 ```
 
 ## Required workflow
