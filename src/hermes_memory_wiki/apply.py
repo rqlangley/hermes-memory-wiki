@@ -28,6 +28,9 @@ class WikiMutation:
     body: str
     source_ids: list[str]
     claims: list[dict[str, Any]] = field(default_factory=list)
+    questions: list[str] = field(default_factory=list)
+    contradictions: list[dict[str, Any]] = field(default_factory=list)
+    confidence: int | float | None = None
     status: str = "draft"
     path: str | None = None
     id: str | None = None
@@ -44,9 +47,9 @@ class ApplyResult:
 
 def normalize_mutation(raw: Mapping[str, Any]) -> WikiMutation:
     """Validate and normalize a raw structured wiki mutation."""
-    mutation_type = _required_string(raw, "type")
+    mutation_type = _required_string(raw, "op")
     if mutation_type != "create_synthesis":
-        raise ValueError(f"unsupported mutation type: {mutation_type}")
+        raise ValueError(f"unsupported mutation op: {mutation_type}")
 
     title = _required_string(raw, "title")
     body = _required_string(raw, "body")
@@ -58,6 +61,9 @@ def normalize_mutation(raw: Mapping[str, Any]) -> WikiMutation:
         body=body,
         source_ids=source_ids,
         claims=_claims(raw.get("claims")),
+        questions=_string_list(raw.get("questions")),
+        contradictions=_claims(raw.get("contradictions")),
+        confidence=_optional_number(raw.get("confidence")),
         status=_optional_string(raw.get("status")) or "draft",
         path=_optional_string(raw.get("path")),
         id=_optional_string(raw.get("id")),
@@ -99,6 +105,12 @@ def _apply_create_synthesis(config: MemoryWikiConfig, mutation: WikiMutation) ->
         "status": mutation.status,
         "updatedAt": datetime.now(timezone.utc).isoformat(),
     }
+    if mutation.questions:
+        frontmatter["questions"] = mutation.questions
+    if mutation.contradictions:
+        frontmatter["contradictions"] = mutation.contradictions
+    if mutation.confidence is not None:
+        frontmatter["confidence"] = mutation.confidence
     body = replace_managed_block(existing_body, "Summary", mutation.body)
     body = ensure_human_notes_block(body)
     path.write_text(render_wiki_markdown(WikiMarkdown(frontmatter, body)), encoding="utf-8")
@@ -130,6 +142,14 @@ def _optional_string(value: Any) -> str | None:
     else:
         text = str(value).strip()
     return text or None
+
+
+def _optional_number(value: Any) -> int | float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return value
+    return None
 
 
 def _string_list(value: Any) -> list[str]:

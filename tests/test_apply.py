@@ -22,7 +22,7 @@ def _config(root):
 
 def _base_raw(**overrides):
     raw = {
-        "type": "create_synthesis",
+        "op": "create_synthesis",
         "title": "Project Alpha: Memory & RAG!",
         "body": "Project Alpha uses retrieval augmented memory.",
         "sourceIds": ["source.chat-1", "source.note-2"],
@@ -37,6 +37,25 @@ def _base_raw(**overrides):
     }
     raw.update(overrides)
     return raw
+
+
+def test_normalize_create_synthesis_accepts_op_discriminator():
+    mutation = normalize_mutation(_base_raw())
+
+    assert mutation.type == "create_synthesis"
+
+
+def test_normalize_create_synthesis_rejects_missing_op():
+    raw = _base_raw()
+    raw.pop("op")
+
+    with pytest.raises(ValueError, match="op"):
+        normalize_mutation(raw)
+
+
+def test_normalize_create_synthesis_rejects_unsupported_op():
+    with pytest.raises(ValueError, match="unsupported mutation op: update_metadata"):
+        normalize_mutation(_base_raw(op="update_metadata"))
 
 
 @pytest.mark.parametrize("missing", ["title", "body", "sourceIds"])
@@ -83,6 +102,27 @@ def test_create_synthesis_frontmatter_contains_claims_source_ids_status_and_upda
     ]
     assert doc.frontmatter["status"] == "draft"
     assert re.match(r"^\d{4}-\d{2}-\d{2}T", doc.frontmatter["updatedAt"])
+
+
+def test_create_synthesis_frontmatter_contains_questions_contradictions_and_confidence(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+
+    result = apply_mutation(
+        config,
+        normalize_mutation(
+            _base_raw(
+                questions=["How will Project Alpha validate memory quality?"],
+                contradictions=[{"text": "One source says RAG is not in scope."}],
+                confidence=0.72,
+            )
+        ),
+    )
+
+    doc = parse_wiki_markdown((config.vault_path / result.path).read_text(encoding="utf-8"))
+    assert doc.frontmatter["questions"] == ["How will Project Alpha validate memory quality?"]
+    assert doc.frontmatter["contradictions"] == [{"text": "One source says RAG is not in scope."}]
+    assert doc.frontmatter["confidence"] == 0.72
 
 
 def test_create_synthesis_writes_generated_summary_and_human_notes_blocks(tmp_path):
