@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 5.3
+**Last updated:** 2026-05-27 after Task 5.4
 
 ## Project
 
@@ -63,6 +63,10 @@ a42cc69 fix: harden embedding response validation
 affbad6 feat: build wiki vector search documents
 425d4aa feat: persist wiki vector index in sqlite
 ff52a71 fix: close vector index sqlite connections
+4d2fa1d docs: update handoff after vector index storage
+4132993 feat: reindex wiki embeddings incrementally
+f74e076 fix: protect reindex state on embedding diagnostics
+186fad7 fix: apply reindex updates atomically
 ```
 
 Completed tasks:
@@ -482,18 +486,60 @@ Non-blocking notes:
 
 - The approved schema keys embeddings by `document_id`, so storing a different provider/model for the same document overwrites the previous embedding. This matches Task 5.3/design v1 but remains a future limitation if concurrent multiple embedding models are required.
 
+### Task 5.4 — Implement reindex workflow
+
+Files:
+
+- `src/hermes_memory_wiki/vector_index.py`
+- `tests/test_reindex.py`
+
+Implemented:
+
+- `ReindexResult` dataclass for embedded/skipped/deleted counts, provider/model/dimensions, and diagnostics.
+- `reindex_vault(...)` workflow that reads queryable pages, builds page/claim search documents, plans stale documents without mutating the index, embeds only required documents, and stores updates in SQLite.
+- Default vector index path at `<vault>/.hermes-wiki/vector/index.sqlite`.
+- Default OpenAI provider construction from `MemoryWikiConfig.embeddings`.
+- Known OpenAI embedding dimensions for `text-embedding-3-small`, `text-embedding-3-large`, and `text-embedding-ada-002` so default OpenAI reindex can perform dimension-aware stale checks.
+- Missing API key diagnostics before any SQLite mutation for default OpenAI reindex.
+- Atomic document sync plus embedding storage after successful embedding calls; provider/storage failures return diagnostics without mutating existing document or embedding rows.
+- Deletion counting for documents no longer present in the vault.
+
+Covered behavior:
+
+- first reindex embeds all current page and claim documents;
+- second reindex skips unchanged documents;
+- `force=True` re-embeds unchanged documents;
+- changed page text re-embeds only changed documents;
+- deleted pages are counted and removed after successful reindex;
+- missing OpenAI API key returns a diagnostic without deleting or mutating existing index rows;
+- provider embedding failures return typed diagnostics and leave existing index rows unchanged.
+
+Review results:
+
+- Initial spec compliance: FAIL; fixed missing-key mutation, missing regression coverage, and default OpenAI dimension-aware stale checks.
+- Spec compliance after fixes: PASS.
+- Initial code quality: REQUEST_CHANGES; fixed atomicity so provider/storage failures do not partially mutate the index.
+- Code quality after fixes: APPROVED.
+
+Non-blocking notes:
+
+- On provider failure, `deleted_count` currently reports the planned deletion count even though no mutation is applied. This is acceptable for Task 5.4 because diagnostics indicate failure and the persisted index remains unchanged; a future API polish pass may separate planned and applied deletion counts.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 5.3:
+Latest verification after Task 5.4:
 
 ```bash
-.venv/bin/python -m pytest tests/test_vector_index.py -q
-# 15 passed
+.venv/bin/python -m pytest tests/test_reindex.py -q
+# 8 passed
+
+.venv/bin/python -m pytest tests/test_vector_index.py tests/test_reindex.py -q
+# 23 passed
 
 .venv/bin/python -m pytest -q
-# 91 passed
+# 99 passed
 
 .venv/bin/python -m compileall src tests
 # passed
@@ -552,33 +598,34 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 5.4 — Implement reindex workflow** from the implementation plan.
+Continue with **Task 5.5 — Implement vector search** from the implementation plan.
 
 Files:
 
 - modify `src/hermes_memory_wiki/vector_index.py`
-- create/modify `tests/test_reindex.py`
+- create `tests/test_vector_search.py`
 
 Required TDD test cases:
 
-- reindex embeds all docs on first run;
-- second run skips unchanged docs;
-- force reindex re-embeds;
-- changed page text re-embeds only changed docs;
-- missing API key returns diagnostic without corrupting index.
+- cosine similarity ranks expected fake vectors;
+- vector search embeds query once;
+- returns page and claim results with snippets/metadata;
+- handles empty/missing index gracefully;
+- dimension mismatch is diagnosed.
 
 Implementation notes:
 
-- expose `ReindexResult` and `reindex_vault(...)` as specified in the implementation plan;
-- build documents from queryable pages and use `VectorIndex` from Task 5.3;
+- expose `cosine_similarity(...)` and `vector_search(...)` as specified in the implementation plan;
+- use `VectorIndex.load_embeddings(...)` and `EmbeddingProvider.embed_texts(...)`;
+- return `WikiSearchResult` objects compatible with keyword/hybrid search;
 - use `FakeEmbeddingProvider` in tests; no network access in default tests;
-- missing OpenAI API key should return/report a clear diagnostic without corrupting stored documents/embeddings;
+- preserve missing-index / unavailable-vector diagnostics for later hybrid fallback;
 - no OpenClaw runtime imports or dependencies.
 
 Expected commit message:
 
 ```text
-feat: reindex wiki embeddings incrementally
+feat: search wiki vector index
 ```
 
 ## Required workflow
