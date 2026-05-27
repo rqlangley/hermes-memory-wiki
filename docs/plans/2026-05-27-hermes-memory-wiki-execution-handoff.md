@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 7.2
+**Last updated:** 2026-05-27 after Task 7.3
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists and has been pushed to origin through Task 7.2 after verification, review, and handoff update.
+The feature branch exists and has been pushed to origin through Task 7.3 after verification, review, and handoff update.
 
 Completed commits:
 
@@ -79,6 +79,8 @@ c41ca28 docs: update handoff after wiki get
 aff7ffe feat: create wiki synthesis mutations
 86b9186 fix: accept create synthesis op mutations
 e33cd7a fix: validate synthesis mutation fields
+3981671 docs: update handoff after synthesis mutations
+d5160bf feat: update wiki page metadata
 ```
 
 Completed tasks:
@@ -683,21 +685,57 @@ Review results:
 - Initial code quality: REQUEST_CHANGES; fixed contradiction text-list normalization, confidence validation, and explicit path queryability validation.
 - Code quality after fixes: APPROVED.
 
+### Task 7.3 — Implement `update_metadata` mutation
+
+Files:
+
+- `src/hermes_memory_wiki/apply.py`
+- `tests/test_apply.py`
+
+Implemented:
+
+- `normalize_mutation(...)` support for `op: update_metadata` mutations.
+- `apply_mutation(...)` dispatch for metadata-only updates.
+- Existing page lookup via `get_page(...)` with clear missing-page errors.
+- Frontmatter updates for title, sourceIds, claims, questions, contradictions, confidence, and status while preserving body content exactly.
+- Empty list values remove list frontmatter fields such as claims; `confidence: null` removes confidence.
+- `updatedAt` is refreshed on every metadata update.
+- Safe writes through the resolved page path under the configured vault root.
+
+Covered behavior:
+
+- lookup required;
+- missing page raises a clear error;
+- sourceIds update replaces normalized source IDs;
+- empty claims remove claims field;
+- confidence null removes confidence;
+- body is preserved;
+- updatedAt changes.
+
+Review results:
+
+- Spec compliance: PASS.
+- Code quality: APPROVED.
+
+Non-blocking notes:
+
+- Future hardening could add explicit update_metadata tests for symlink/path-traversal integration and decide whether lookup-only updatedAt-only mutations should be rejected.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 7.2:
+Latest verification after Task 7.3:
 
 ```bash
 .venv/bin/python -m pytest tests/test_apply.py -q
-# 22 passed
+# 29 passed
 
-.venv/bin/python -m pytest tests/test_markdown.py tests/test_apply.py tests/test_vault_read.py -q
-# 40 passed
+.venv/bin/python -m pytest tests/test_markdown.py tests/test_apply.py tests/test_get.py -q
+# 48 passed
 
 .venv/bin/python -m pytest -q
-# 144 passed
+# 151 passed
 
 .venv/bin/python -m compileall src tests
 # passed
@@ -756,35 +794,35 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 7.3 — Implement `update_metadata` mutation** from the implementation plan.
+Continue with **Task 7.4 — Implement compile cache and indexes** from the implementation plan.
 
 Files:
 
-- modify `src/hermes_memory_wiki/apply.py`
-- modify `tests/test_apply.py`
+- create `src/hermes_memory_wiki/compile.py`
+- create `tests/test_compile.py`
 
 Required TDD test cases:
 
-- lookup required;
-- missing page raises clear error;
-- sourceIds update replaces normalized source IDs;
-- empty claims remove claims field;
-- confidence null removes confidence;
-- body is preserved;
-- updatedAt changes.
+- root index includes page counts;
+- directory indexes list pages by kind;
+- `agent-digest.json` includes pages and claim counts;
+- `claims.jsonl` contains one claim per line;
+- `search-docs.jsonl` contains page/claim docs;
+- compile is idempotent if nothing changed;
+- compile appends log when files update.
 
 Implementation notes:
 
-- extend `normalize_mutation(...)`/`apply_mutation(...)` for `op: update_metadata` only;
-- use `get_page(...)`/existing lookup helpers where appropriate;
-- update frontmatter deterministically while preserving page body and human/generated blocks;
-- keep writes under configured vault root;
-- do not implement Hermes `wiki_apply` tool registration yet (Task 8.1).
+- expose `CompileResult` and `compile_vault(config: MemoryWikiConfig) -> CompileResult` as specified in the implementation plan;
+- use existing `read_queryable_pages(...)` and `build_search_documents(...)` where appropriate;
+- keep dashboard/index set small for v1 and deterministic;
+- write cache files under `.hermes-wiki/cache/` and append compile log only when files update;
+- do not implement Hermes `wiki_compile` tool registration yet (Task 8.1).
 
 Expected commit message:
 
 ```text
-feat: update wiki page metadata
+feat: compile wiki indexes and caches
 ```
 
 ## Required workflow
