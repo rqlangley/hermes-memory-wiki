@@ -1,0 +1,219 @@
+from __future__ import annotations
+
+import json
+
+from hermes_memory_wiki.config import MemoryWikiConfig
+from hermes_memory_wiki.lint import lint_vault
+from hermes_memory_wiki.vector_index import VectorIndex, build_search_documents
+from hermes_memory_wiki.vault import METADATA_DIRECTORY, initialize_vault, read_queryable_pages
+
+
+def _config(root):
+    return MemoryWikiConfig(vault_path=root)
+
+
+def _write(root, relative_path, content):
+    path = root / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
+def _page(
+    *,
+    page_id="concept:example",
+    title="Example",
+    page_type="concept",
+    updated_at="2026-05-01T00:00:00+00:00",
+    confidence=None,
+    source_ids=(),
+    claims="",
+    questions=(),
+    contradictions=(),
+):
+    confidence_line = f"confidence: {confidence}\n" if confidence is not None else ""
+    source_lines = ""
+    if source_ids:
+        source_lines = "sourceIds:\n" + "".join(f"  - {source_id}\n" for source_id in source_ids)
+    question_lines = ""
+    if questions:
+        question_lines = "questions:\n" + "".join(f"  - {question}\n" for question in questions)
+    contradiction_lines = ""
+    if contradictions:
+        contradiction_lines = "contradictions:\n" + "".join(f"  - {item}\n" for item in contradictions)
+    claims_block = f"claims:\n{claims}" if claims else ""
+    return f"""---
+id: {page_id}
+title: {title}
+pageType: {page_type}
+updatedAt: {updated_at}
+{confidence_line}{source_lines}{question_lines}{contradiction_lines}{claims_block}---
+# {title}
+
+Body for {title}.
+"""
+
+
+def _issue_codes(result):
+    return [issue.code for issue in result.issues]
+
+
+def _issues_by_code(result, code):
+    return [issue for issue in result.issues if issue.code == code]
+
+
+def test_missing_claim_evidence_creates_provenance_warning(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(
+        root,
+        "concepts/evidence.md",
+        _page(claims="  - id: claim:evidence-1\n    text: This claim has no evidence.\n"),
+    )
+
+    result = lint_vault(_config(root))
+
+    issues = _issues_by_code(result, "missing-claim-evidence")
+    assert len(issues) == 1
+    assert issues[0].severity == "warning"
+    assert issues[0].category == "provenance"
+    assert issues[0].path == "concepts/evidence.md"
+    assert issues[0].claim_id == "claim:evidence-1"
+
+
+def test_contradictions_create_contradiction_issue(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(root, "concepts/conflict.md", _page(contradictions=("A conflicts with B.",)))
+
+    result = lint_vault(_config(root))
+
+    issues = _issues_by_code(result, "contradiction")
+    assert len(issues) == 1
+    assert issues[0].severity == "issue"
+    assert issues[0].category == "contradiction"
+    assert "A conflicts with B." in issues[0].message
+
+
+def test_questions_create_open_question_issue(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(root, "concepts/question.md", _page(questions=("What remains unknown?",)))
+
+    result = lint_vault(_config(root))
+
+    issues = _issues_by_code(result, "open-question")
+    assert len(issues) == 1
+    assert issues[0].category == "open-question"
+    assert "What remains unknown?" in issues[0].message
+
+
+def test_low_confidence_creates_low_confidence_issue(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(
+        root,
+        "concepts/low.md",
+        _page(
+            confidence=0.4,
+            claims="  - id: claim:low-1\n    text: Weak claim.\n    confidence: 0.2\n    evidence:\n      - path: sources/source.md\n",
+        ),
+    )
+    _write(root, "sources/source.md", _page(page_id="source:source", title="Source", page_type="source"))
+
+    result = lint_vault(_config(root))
+
+    issues = _issues_by_code(result, "low-confidence")
+    assert [(issue.path, issue.claim_id) for issue in issues] == [
+        ("concepts/low.md", None),
+        ("concepts/low.md", "claim:low-1"),
+    ]
+
+
+def test_stale_updated_at_creates_stale_issue(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(root, "concepts/stale.md", _page(updated_at="2000-01-01T00:00:00+00:00"))
+
+    result = lint_vault(_config(root))
+
+    issues = _issues_by_code(result, "stale-updated-at")
+    assert len(issues) == 1
+    assert issues[0].category == "stale"
+    assert issues[0].path == "concepts/stale.md"
+
+
+def test_duplicate_ids_create_schema_error(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(root, "concepts/one.md", _page(page_id="concept:duplicate", title="One"))
+    _write(root, "concepts/two.md", _page(page_id="concept:duplicate", title="Two"))
+
+    result = lint_vault(_config(root))
+
+    issues = _issues_by_code(result, "duplicate-id")
+    assert len(issues) == 1
+    assert issues[0].severity == "error"
+    assert issues[0].category == "schema"
+    assert issues[0].details["id"] == "concept:duplicate"
+    assert issues[0].details["paths"] == ["concepts/one.md", "concepts/two.md"]
+
+
+def test_broken_source_links_create_broken_link_issue(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(
+        root,
+        "concepts/broken.md",
+        _page(
+            source_ids=("source:missing",),
+            claims="  - id: claim:broken-1\n    text: Broken evidence.\n    evidence:\n      - path: sources/missing.md\n      - sourceId: source:also-missing\n",
+        ),
+    )
+
+    result = lint_vault(_config(root))
+
+    issues = _issues_by_code(result, "broken-source-link")
+    assert [(issue.path, issue.claim_id, issue.details["target"]) for issue in issues] == [
+        ("concepts/broken.md", None, "source:missing"),
+        ("concepts/broken.md", "claim:broken-1", "sources/missing.md"),
+        ("concepts/broken.md", "claim:broken-1", "source:also-missing"),
+    ]
+
+
+def test_stale_vector_index_creates_vector_index_warning(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    page_path = _write(root, "concepts/vector.md", _page(title="Vector", claims="  - id: claim:vector-1\n    text: Original claim.\n    evidence:\n      - text: observed\n"))
+    old_docs = build_search_documents(read_queryable_pages(root))
+    index = VectorIndex(root / METADATA_DIRECTORY / "vector" / "index.sqlite")
+    index.upsert_documents(old_docs)
+    page_path.write_text(_page(title="Vector", claims="  - id: claim:vector-1\n    text: Changed claim.\n    evidence:\n      - text: observed\n"), encoding="utf-8")
+
+    result = lint_vault(_config(root))
+
+    issues = _issues_by_code(result, "stale-vector-index")
+    assert len(issues) == 1
+    assert issues[0].severity == "warning"
+    assert issues[0].category == "vector-index"
+    assert issues[0].path == "concepts/vector.md"
+
+
+def test_lint_report_written_as_markdown_and_json(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(root, "concepts/report.md", _page(questions=("Document this?",)))
+
+    result = lint_vault(_config(root))
+
+    assert result.markdown_path == root / METADATA_DIRECTORY / "cache" / "lint-report.md"
+    assert result.json_path == root / METADATA_DIRECTORY / "cache" / "lint-report.json"
+    assert result.markdown_path in result.updated_files
+    assert result.json_path in result.updated_files
+    markdown = result.markdown_path.read_text(encoding="utf-8")
+    assert "# Memory Wiki Lint Report" in markdown
+    assert "open-question" in markdown
+    payload = json.loads(result.json_path.read_text(encoding="utf-8"))
+    assert payload["version"] == 1
+    assert payload["summary"]["issueCount"] == len(result.issues)
+    assert payload["issues"][0]["code"] == "open-question"
