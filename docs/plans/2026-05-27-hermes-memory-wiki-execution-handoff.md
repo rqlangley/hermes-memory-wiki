@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 7.4
+**Last updated:** 2026-05-27 after Task 7.5
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists and has been pushed to origin through Task 7.4 after verification, review, and handoff update.
+The feature branch exists and has been pushed to origin through Task 7.5 after verification, review, and handoff update.
 
 Completed commits:
 
@@ -84,6 +84,9 @@ d5160bf feat: update wiki page metadata
 200c0d0 docs: update handoff after metadata mutations
 10b1d34 feat: compile wiki indexes and caches
 38ca9c3 fix: harden wiki compile outputs
+308b590 docs: update handoff after wiki compile
+0cf2b70 feat: lint wiki health and provenance
+0972b13 fix: harden wiki lint checks
 ```
 
 Completed tasks:
@@ -762,21 +765,60 @@ Review results:
 - Spec compliance after fixes: PASS.
 - Code quality after fixes: APPROVED.
 
+### Task 7.5 — Implement lint
+
+Files:
+
+- `src/hermes_memory_wiki/lint.py`
+- `tests/test_lint.py`
+
+Implemented:
+
+- `LintIssue` and `LintResult` dataclasses.
+- `lint_vault(...)` entry point that reads queryable pages and writes deterministic lint reports.
+- Health/provenance/schema checks for missing claim evidence, contradictions, open questions, low confidence, stale `updatedAt`, duplicate page ids, duplicate claim ids, invalid markdown, broken source/evidence links, and stale vector indexes.
+- Vector index inspection using current search document hash conventions, with warnings for missing/changed/extra vector documents and unreadable/symlinked vector metadata.
+- `.hermes-wiki/cache/lint-report.md` and `.hermes-wiki/cache/lint-report.json` report writing with idempotent content comparison.
+- Symlink hardening for lint report outputs and vector metadata inspection.
+
+Covered behavior:
+
+- missing claim evidence creates provenance warning;
+- contradictions create contradiction issue;
+- questions create open-question issue;
+- low confidence creates low-confidence issue;
+- stale updatedAt creates stale issue;
+- duplicate ids create schema error;
+- duplicate claim ids create schema error;
+- invalid markdown creates schema error;
+- broken source links create broken-link issue;
+- stale/missing/extra vector index state creates vector-index warning;
+- lint report written as markdown and JSON;
+- unchanged lint reports are idempotent;
+- symlinked vector metadata is not followed outside the vault.
+
+Review results:
+
+- Spec compliance: PASS.
+- Initial code quality: REQUEST_CHANGES; fixed vector metadata symlink safety and added robustness coverage.
+- Spec compliance after fixes: PASS.
+- Code quality after fixes: APPROVED.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 7.4:
+Latest verification after Task 7.5:
 
 ```bash
-.venv/bin/python -m pytest tests/test_compile.py -q
-# 11 passed
+.venv/bin/python -m pytest tests/test_lint.py -q
+# 14 passed
 
-.venv/bin/python -m pytest tests/test_compile.py tests/test_vault_read.py tests/test_vector_index.py -q
-# 33 passed
+.venv/bin/python -m pytest tests/test_lint.py tests/test_compile.py tests/test_vault_read.py -q
+# 32 passed
 
 .venv/bin/python -m pytest -q
-# 162 passed
+# 176 passed
 
 .venv/bin/python -m compileall src tests
 # passed
@@ -835,37 +877,33 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 7.5 — Implement lint** from the implementation plan.
+Continue with **Task 8.1 — Register plugin tools** from the implementation plan.
 
 Files:
 
-- create `src/hermes_memory_wiki/lint.py`
-- create `tests/test_lint.py`
+- create `src/hermes_memory_wiki/tools.py`
+- modify `src/hermes_memory_wiki/plugin.py`
+- create `tests/test_tools.py`
 
 Required TDD test cases:
 
-- missing claim evidence creates provenance warning;
-- contradictions create contradiction issue;
-- questions create open-question issue;
-- low confidence creates low-confidence issue;
-- stale updatedAt creates stale issue;
-- duplicate ids create schema error;
-- broken source links create broken-link issue;
-- stale vector index creates vector-index warning;
-- lint report written as markdown and JSON.
+- `register(ctx)` registers all expected tools;
+- every tool uses toolset `memory_wiki`;
+- schemas reject missing required fields where relevant;
+- handlers return text content and details.
 
 Implementation notes:
 
-- expose `LintIssue`, `LintResult`, and `lint_vault(config: MemoryWikiConfig) -> LintResult` as specified in the implementation plan;
-- use existing page readers, compile cache/index conventions, and vector index metadata where appropriate;
-- keep lint categories deterministic and scoped to v1 health/provenance checks;
-- write lint report files under `.hermes-wiki/cache/` or another planned metadata location;
-- do not implement Hermes `wiki_lint` tool registration yet (Task 8.1).
+- use a fake context with `register_tool(...)`/`register_skill(...)` as shown in the implementation plan;
+- expected tools: `wiki_init`, `wiki_status`, `wiki_search`, `wiki_get`, `wiki_apply`, `wiki_compile`, `wiki_reindex`, `wiki_lint`;
+- use JSON-schema-like dicts accepted by Hermes `ctx.register_tool`;
+- handlers should call existing core modules (`vault`, `hybrid_search`, `apply`, `compile`, `lint`, `vector_index`) without adding new core behavior;
+- do not implement plugin manifest or bundled skills yet (Tasks 8.2/8.3).
 
 Expected commit message:
 
 ```text
-feat: lint wiki health and provenance
+feat: register hermes wiki tools
 ```
 
 ## Required workflow
