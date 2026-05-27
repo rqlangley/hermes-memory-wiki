@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from hermes_memory_wiki.config import MemoryWikiConfig
 from hermes_memory_wiki.markdown import WikiMarkdownError
+from hermes_memory_wiki.paths import normalize_relative_path
 from hermes_memory_wiki.schema import WikiPageSummary, to_page_summary
 
 
@@ -42,6 +43,55 @@ class InitResult:
     created_files: list[Path]
 
 
+@dataclass(frozen=True)
+class GetPageResult:
+    path: str
+    id: str
+    title: str
+    kind: str
+    content: str
+    from_line: int
+    line_count: int
+    total_lines: int
+    truncated: bool
+    page: WikiPageSummary
+
+
+def get_page(
+    config: MemoryWikiConfig,
+    lookup: str,
+    *,
+    from_line: int = 1,
+    line_count: int = 200,
+) -> GetPageResult | None:
+    """Resolve a queryable wiki page and return a frontmatter-free excerpt."""
+    page = _resolve_page(config.vault_path, lookup)
+    if page is None:
+        return None
+
+    lines = page.body.splitlines()
+    total_lines = len(lines)
+    safe_from_line = max(1, from_line)
+    safe_line_count = max(0, line_count)
+    start_index = min(total_lines, safe_from_line - 1)
+    end_index = min(total_lines, start_index + safe_line_count)
+    content = "\n".join(lines[start_index:end_index])
+    truncated = start_index > 0 or end_index < total_lines
+
+    return GetPageResult(
+        path=page.path,
+        id=page.id,
+        title=page.title,
+        kind=page.kind,
+        content=content,
+        from_line=safe_from_line,
+        line_count=safe_line_count,
+        total_lines=total_lines,
+        truncated=truncated,
+        page=page,
+    )
+
+
 def list_wiki_markdown_files(root: Path) -> list[str]:
     """List immediate Markdown pages from queryable wiki directories."""
     files: list[str] = []
@@ -73,6 +123,55 @@ def read_queryable_pages(root: Path) -> list[WikiPageSummary]:
         if summary is not None:
             pages.append(summary)
     return pages
+
+
+def _resolve_page(root: Path, lookup: str) -> WikiPageSummary | None:
+    normalized_lookup = lookup.strip()
+    if not normalized_lookup:
+        return None
+
+    pages = read_queryable_pages(root)
+    by_path = {page.path: page for page in pages}
+
+    for candidate in _lookup_path_candidates(normalized_lookup):
+        page = by_path.get(candidate)
+        if page is not None:
+            return page
+
+    basename_matches = [
+        page
+        for page in pages
+        if PurePosixPath(page.path).name == normalized_lookup
+        or PurePosixPath(page.path).stem == normalized_lookup
+    ]
+    if basename_matches:
+        return basename_matches[0]
+
+    for page in pages:
+        if page.id == normalized_lookup:
+            return page
+
+    for page in pages:
+        if page.title == normalized_lookup:
+            return page
+
+    for page in pages:
+        if any(claim.id == normalized_lookup for claim in page.claims):
+            return page
+
+    return None
+
+
+def _lookup_path_candidates(lookup: str) -> list[str]:
+    try:
+        normalized = normalize_relative_path(lookup)
+    except ValueError:
+        return []
+
+    candidates = [normalized]
+    if PurePosixPath(normalized).suffix != ".md":
+        candidates.append(f"{normalized}.md")
+    return candidates
 
 
 def initialize_vault(
