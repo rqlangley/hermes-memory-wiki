@@ -21,6 +21,7 @@ from hermes_memory_wiki.markdown import (
     parse_wiki_markdown,
 )
 from hermes_memory_wiki.schema import WikiClaim, WikiEvidence, WikiPageSummary
+from hermes_memory_wiki.search_keyword import WikiSearchResult
 from hermes_memory_wiki.vault import METADATA_DIRECTORY, read_queryable_pages
 
 _GENERATED_BLOCK_RE = re.compile(
@@ -40,6 +41,14 @@ _OPENAI_EMBEDDING_DIMENSIONS = {
     "text-embedding-3-small": 1536,
     "text-embedding-3-large": 3072,
     "text-embedding-ada-002": 1536,
+}
+
+_VALID_VECTOR_SEARCH_MODES = {
+    "auto",
+    "find-person",
+    "route-question",
+    "source-evidence",
+    "raw-claim",
 }
 
 
@@ -74,6 +83,155 @@ class ReindexResult:
     model: str
     dimensions: int | None
     diagnostics: list[str]
+
+
+def cosine_similarity(a: Sequence[float], b: Sequence[float]) -> float:
+    """Return cosine similarity for two numeric vectors."""
+    if len(a) != len(b):
+        raise ValueError(
+            f"dimension mismatch: left vector has {len(a)} dimensions, "
+            f"right vector has {len(b)} dimensions"
+        )
+    dot_product = 0.0
+    a_norm_squared = 0.0
+    b_norm_squared = 0.0
+    for left, right in zip(a, b, strict=True):
+        left_float = float(left)
+        right_float = float(right)
+        dot_product += left_float * right_float
+        a_norm_squared += left_float * left_float
+        b_norm_squared += right_float * right_float
+    if a_norm_squared == 0.0 or b_norm_squared == 0.0:
+        return 0.0
+    return dot_product / ((a_norm_squared**0.5) * (b_norm_squared**0.5))
+
+
+def vector_search(
+    config: MemoryWikiConfig,
+    query: str,
+    *,
+    provider: EmbeddingProvider | None = None,
+    max_results: int = 10,
+    mode: str = "auto",
+) -> list[WikiSearchResult]:
+    """Return cosine-ranked wiki documents from the stored vector index."""
+    if mode not in _VALID_VECTOR_SEARCH_MODES:
+        raise ValueError(f"Unsupported vector search mode: {mode}")
+    if max_results <= 0:
+        return []
+
+    diagnostics: list[str] = []
+    if provider is None:
+        provider, provider_diagnostics = _provider_from_config(config)
+        diagnostics.extend(provider_diagnostics)
+        if provider is None:
+            return []
+
+    index_path = _default_index_path(config)
+    if not index_path.exists():
+        diagnostics.append(f"Vector index not found: {index_path}")
+        return []
+
+    index = VectorIndex(index_path)
+    stored_embeddings = _load_embeddings_for_search(index, provider)
+    if not stored_embeddings:
+        diagnostics.append(
+            "No vector embeddings available "
+            f"(provider={provider.provider}, model={provider.model})."
+        )
+        return []
+
+    query_embeddings = provider.embed_texts([query])
+    if len(query_embeddings) != 1:
+        raise ValueError(
+            "query embedding count mismatch: "
+            f"expected 1, got {len(query_embeddings)}"
+        )
+    query_embedding = query_embeddings[0]
+
+    scored_results: list[WikiSearchResult] = []
+    for stored_embedding in stored_embeddings:
+        if len(query_embedding) != len(stored_embedding.embedding):
+            raise ValueError(
+                "dimension mismatch for query and stored embedding: "
+                f"query has {len(query_embedding)} dimensions; "
+                f"{stored_embedding.document.id} has "
+                f"{len(stored_embedding.embedding)} dimensions"
+            )
+        scored_results.append(
+            _vector_result(
+                stored_embedding.document,
+                score=cosine_similarity(query_embedding, stored_embedding.embedding),
+                mode=mode,
+            )
+        )
+
+    scored_results.sort(
+        key=lambda result: (-result.score, result.path, result.matched_claim_id or "")
+    )
+    return scored_results[:max_results]
+
+
+def _load_embeddings_for_search(
+    index: VectorIndex, provider: EmbeddingProvider
+) -> list[StoredEmbedding]:
+    unfiltered_provider = _ProviderIdentity(
+        provider=provider.provider,
+        model=provider.model,
+        dimensions=None,
+    )
+    return index.load_embeddings(unfiltered_provider)
+
+
+@dataclass
+class _ProviderIdentity:
+    provider: str
+    model: str
+    dimensions: int | None
+
+    def embed_texts(self, texts: Sequence[str]) -> list[list[float]]:  # pragma: no cover
+        raise NotImplementedError
+
+
+def _vector_result(document: SearchDocument, *, score: float, mode: str) -> WikiSearchResult:
+    metadata = dict(document.metadata)
+    metadata.update(
+        {
+            "search_type": "vector",
+            "document_id": document.id,
+            "document_type": document.doc_type,
+        }
+    )
+    matched_claim_id = None
+    if document.doc_type == "claim":
+        raw_claim_id = document.metadata.get("claim_id")
+        matched_claim_id = str(raw_claim_id) if raw_claim_id else None
+    return WikiSearchResult(
+        corpus="wiki",
+        path=document.page_path,
+        title=document.title,
+        kind=document.kind,
+        score=float(score),
+        snippet=_vector_snippet(document),
+        search_mode=mode,
+        matched_claim_id=matched_claim_id,
+        metadata=metadata,
+    )
+
+
+def _vector_snippet(document: SearchDocument) -> str:
+    lines = [line.strip() for line in document.text.splitlines() if line.strip()]
+    if not lines:
+        return ""
+    if document.doc_type == "claim":
+        for line in lines:
+            if line.startswith("Claim:"):
+                return line.removeprefix("Claim:").strip()
+    for index, line in enumerate(lines):
+        if line == "Body:" and index + 1 < len(lines):
+            return lines[index + 1]
+    return lines[0]
+
 
 class VectorIndex:
 
