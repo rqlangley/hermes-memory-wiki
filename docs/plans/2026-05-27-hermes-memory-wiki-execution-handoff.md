@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 2.3
+**Last updated:** 2026-05-27 after Task 3.1
 
 ## Project
 
@@ -45,6 +45,8 @@ d16c59b feat: add vault path safety helpers
 2555699 feat: parse and render wiki markdown
 0267ccd feat: normalize wiki page summaries
 2446d9a feat: preserve wiki managed and human blocks
+a3f5c7c feat: initialize hermes wiki vault
+4b24e01 fix: reject unsafe vault symlinks
 ```
 
 Completed tasks:
@@ -209,18 +211,46 @@ Non-blocking notes:
 
 - `_append_block(...)` normalizes trailing whitespace when appending a new block via `text.rstrip()`; acceptable for current markdown output, but adjust later if byte-for-byte preservation outside managed blocks becomes required.
 
+### Task 3.1 — Initialize vault structure
+
+Files:
+
+- `src/hermes_memory_wiki/vault.py`
+- `tests/test_vault_init.py`
+
+Implemented:
+
+- `METADATA_DIRECTORY = ".hermes-wiki"`
+- `InitResult`
+- `initialize_vault(...)`
+
+Covered behavior:
+
+- creates required vault directories and starter files
+- uses `.hermes-wiki/cache` and `.hermes-wiki/vector`
+- writes deterministic `state.json` from injected `now`
+- creates and appends `log.jsonl` only when something changed
+- second initialization is idempotent
+- existing `inbox.md` content is not overwritten
+- rejects symlinked managed paths to avoid writes outside the configured vault root
+
+Review results:
+
+- Spec compliance: PASS
+- Code quality: APPROVED after scoped symlink-safety fix
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 2.3:
+Latest verification after Task 3.1:
 
 ```bash
-.venv/bin/python -m pytest tests/test_markdown.py -q
-# 11 passed
+.venv/bin/python -m pytest tests/test_vault_init.py -q
+# 7 passed
 
 .venv/bin/python -m pytest -q
-# 31 passed
+# 38 passed
 
 .venv/bin/python -m compileall src tests
 # passed
@@ -279,42 +309,38 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 3.1 — Initialize vault structure** from the implementation plan.
+Continue with **Task 3.2 — List and read queryable pages** from the implementation plan.
 
 Files:
 
-- create `src/hermes_memory_wiki/vault.py`
-- create `tests/test_vault_init.py`
+- modify `src/hermes_memory_wiki/vault.py`
+- create `tests/test_vault_read.py`
 
 Required TDD test cases:
 
-- initialization creates required directories/files;
-- second initialization is idempotent;
-- existing `inbox.md` content is not overwritten;
-- log entry is appended only when something changed;
-- metadata directory is `.hermes-wiki`.
+- lists `.md` files in `sources`, `entities`, `concepts`, `syntheses`, `reports`;
+- excludes directory `index.md`;
+- ignores files outside query dirs;
+- returns summaries with raw content;
+- invalid markdown page is skipped or reported according to selected behavior.
 
 Required API:
 
 ```python
-@dataclass
-class InitResult:
-    root: Path
-    created: bool
-    created_directories: list[Path]
-    created_files: list[Path]
+QUERY_DIRS = ["entities", "concepts", "sources", "syntheses", "reports"]
 
-def initialize_vault(config: MemoryWikiConfig, *, now: datetime | None = None) -> InitResult: ...
+def list_wiki_markdown_files(root: Path) -> list[str]: ...
+def read_queryable_pages(root: Path) -> list[WikiPageSummary]: ...
 ```
 
 Reference only:
 
-- OpenClaw `cli-Cx8TeRn1.js:473-508`
+- OpenClaw `cli-Cx8TeRn1.js:1461-1483`
 
 Expected commit message:
 
 ```text
-feat: initialize hermes wiki vault
+feat: read queryable wiki pages
 ```
 
 ## Required workflow
