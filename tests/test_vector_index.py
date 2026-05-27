@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from dataclasses import dataclass
+
+import pytest
 
 from hermes_memory_wiki.markdown import HERMES_GENERATED_END, HERMES_GENERATED_START
 from hermes_memory_wiki.schema import WikiClaim, WikiEvidence, WikiPageSummary
@@ -151,6 +154,53 @@ def test_vector_index_rejects_embedding_count_mismatch(tmp_path) -> None:
         assert "docs and embeddings length mismatch" in str(error)
     else:  # pragma: no cover - failure path
         raise AssertionError("Expected ValueError")
+
+
+def test_vector_index_rejects_embedding_dimension_mismatch_without_storing(tmp_path) -> None:
+    provider = StubEmbeddingProvider(dimensions=3)
+    doc = _doc("page:one")
+    index = VectorIndex(tmp_path / "vector.sqlite3")
+    index.upsert_documents([doc])
+
+    with pytest.raises(ValueError, match="embedding dimension mismatch"):
+        index.store_embeddings(provider, [doc], [[0.1, 0.2]])
+
+    with sqlite3.connect(tmp_path / "vector.sqlite3") as connection:
+        row_count = connection.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0]
+
+    assert row_count == 0
+
+
+def test_vector_index_closes_sqlite_connections_after_operations(tmp_path) -> None:
+    fd_path = "/proc/self/fd"
+    if not os.path.isdir(fd_path):
+        pytest.skip("/proc/self/fd is unavailable")
+
+    db_path = tmp_path / "vector.sqlite3"
+    provider = StubEmbeddingProvider()
+    doc = _doc("page:one")
+    index = VectorIndex(db_path)
+
+    def open_sqlite_fds() -> int:
+        count = 0
+        for fd_name in os.listdir(fd_path):
+            try:
+                target = os.readlink(os.path.join(fd_path, fd_name))
+            except OSError:
+                continue
+            if str(db_path) in target:
+                count += 1
+        return count
+
+    assert open_sqlite_fds() == 0
+
+    for _ in range(25):
+        index.upsert_documents([doc])
+        index.store_embeddings(provider, [doc], [[0.1, 0.2, 0.3]])
+        assert index.stale_documents_for_embedding(provider) == []
+        assert len(index.load_embeddings(provider)) == 1
+
+    assert open_sqlite_fds() == 0
 
 
 def test_vector_index_skips_unchanged_embeddings_by_hash_provider_model(tmp_path) -> None:

@@ -4,10 +4,11 @@ import hashlib
 import json
 import re
 import sqlite3
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal, Sequence
+from typing import Any, Iterator, Literal, Sequence
 
 from hermes_memory_wiki.embeddings import EmbeddingProvider
 from hermes_memory_wiki.markdown import (
@@ -59,12 +60,12 @@ class VectorIndex:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as connection:
+        with self._connection() as connection:
             self._create_schema(connection)
 
     def upsert_documents(self, docs: Sequence[SearchDocument]) -> None:
         doc_ids = [doc.id for doc in docs]
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.executemany(
                 """
                 INSERT INTO documents (
@@ -99,7 +100,7 @@ class VectorIndex:
             dimension_clause = " OR e.dimensions != ?"
             parameters.append(provider.dimensions)
 
-        with self._connect() as connection:
+        with self._connection() as connection:
             rows = connection.execute(
                 f"""
                 SELECT
@@ -133,6 +134,11 @@ class VectorIndex:
         rows = []
         for doc, embedding in zip(docs, embeddings, strict=True):
             vector = list(embedding)
+            if provider.dimensions is not None and len(vector) != provider.dimensions:
+                raise ValueError(
+                    "embedding dimension mismatch: "
+                    f"expected {provider.dimensions}, got {len(vector)} for document {doc.id}"
+                )
             dimensions = provider.dimensions if provider.dimensions is not None else len(vector)
             rows.append(
                 (
@@ -146,7 +152,7 @@ class VectorIndex:
                 )
             )
 
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.executemany(
                 """
                 INSERT INTO embeddings (
@@ -170,7 +176,7 @@ class VectorIndex:
             dimension_clause = " AND e.dimensions = ?"
             parameters.append(provider.dimensions)
 
-        with self._connect() as connection:
+        with self._connection() as connection:
             rows = connection.execute(
                 f"""
                 SELECT
@@ -204,6 +210,12 @@ class VectorIndex:
         connection = sqlite3.connect(self.db_path)
         connection.execute("PRAGMA foreign_keys = ON")
         return connection
+
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        with closing(self._connect()) as connection:
+            with connection:
+                yield connection
 
     @staticmethod
     def _create_schema(connection: sqlite3.Connection) -> None:
