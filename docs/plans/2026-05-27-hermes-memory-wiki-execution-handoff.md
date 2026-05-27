@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 8.1
+**Last updated:** 2026-05-27 after Task 8.2
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists and has been pushed to origin through Task 8.1 after verification, review, and handoff update.
+The feature branch exists and has been pushed to origin through Task 8.2 after verification, review, and handoff update.
 
 Completed commits:
 
@@ -90,6 +90,8 @@ d5160bf feat: update wiki page metadata
 098bda0 docs: update handoff after wiki lint
 56ff35d feat: register hermes wiki tools
 97d7989 fix: use hermes tool schema keyword
+65123b7 docs: update handoff after tool registration
+e1fe2ee feat: add hermes user plugin layout
 ```
 
 Completed tasks:
@@ -840,21 +842,46 @@ Review results:
 - Spec compliance after fix: PASS.
 - Code quality after fix: APPROVED.
 
+### Task 8.2 — Add plugin manifest for user-plugin layout
+
+Files:
+
+- `plugin.yaml`
+- root `__init__.py`
+- `tests/test_user_plugin_layout.py`
+
+Implemented:
+
+- Root `plugin.yaml` standalone Hermes user-plugin manifest.
+- Root `__init__.py` exposing `register` from `hermes_memory_wiki.plugin`.
+- Manifest declaration for plugin `memory-wiki`, version `0.1.0`, kind `standalone`, and required tool list.
+
+Covered behavior:
+
+- root `__init__.py` exposes the package `register` entry point;
+- `plugin.yaml` parses as YAML and exactly declares the expected plugin metadata and `provides_tools` list;
+- no bundled skills or Task 8.3 behavior added.
+
+Review results:
+
+- Spec compliance: PASS.
+- Code quality: APPROVED.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 8.1:
+Latest verification after Task 8.2:
 
 ```bash
-.venv/bin/python -m pytest tests/test_tools.py -q
-# 10 passed
+.venv/bin/python -m pytest tests/test_user_plugin_layout.py -q
+# 2 passed
 
-.venv/bin/python -m pytest tests/test_tools.py tests/test_vault_init.py tests/test_get.py tests/test_apply.py tests/test_compile.py tests/test_lint.py tests/test_hybrid_search.py tests/test_reindex.py -q
-# 94 passed
+.venv/bin/python -m pytest tests/test_user_plugin_layout.py tests/test_tools.py -q
+# 12 passed
 
 .venv/bin/python -m pytest -q
-# 186 passed
+# 188 passed
 
 .venv/bin/python -m compileall src tests
 # passed
@@ -913,34 +940,33 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 8.2 — Add plugin manifest for user-plugin layout** from the implementation plan.
+Continue with **Task 8.3 — Add plugin skills** from the implementation plan.
 
 Files:
 
-- create `plugin.yaml`
-- create root `__init__.py`
-- create `tests/test_user_plugin_layout.py`
+- create `src/hermes_memory_wiki/skills/wiki-maintainer/SKILL.md`
+- create `src/hermes_memory_wiki/skills/wiki-authoring/SKILL.md`
+- create `src/hermes_memory_wiki/skills/wiki-search/SKILL.md`
+- modify `src/hermes_memory_wiki/plugin.py`
+- modify `tests/test_tools.py` or create `tests/test_skills.py`
 
 Required TDD test cases:
 
-- root `__init__.py` exposes `register` imported from package;
-- `plugin.yaml` includes expected name and tools.
+- `register(ctx)` registers three skills;
+- skill paths exist;
+- skill docs mention correct Hermes tools, not OpenClaw CLI commands.
 
 Implementation notes:
 
-- `plugin.yaml` should include:
-  - `name: memory-wiki`
-  - `version: 0.1.0`
-  - `kind: standalone`
-  - `description: Hermes memory wiki tools with hybrid keyword/vector search.`
-  - `provides_tools` listing `wiki_init`, `wiki_status`, `wiki_search`, `wiki_get`, `wiki_apply`, `wiki_compile`, `wiki_reindex`, `wiki_lint`.
-- root `__init__.py` should expose `register` from `hermes_memory_wiki.plugin`.
-- Do not implement bundled skills yet (Task 8.3).
+- adapt from the OpenClaw memory-wiki skills listed in the source inventory only as reference material;
+- remove bridge/unsafe-local/OpenClaw CLI references unless documented as non-goals;
+- register skills with `ctx.register_skill("wiki-maintainer", path_to_skill, description="Maintain Hermes memory wiki vaults safely.")`-style calls;
+- keep skills Hermes-native and focused on using `wiki_init`, `wiki_status`, `wiki_search`, `wiki_get`, `wiki_apply`, `wiki_compile`, `wiki_reindex`, and `wiki_lint`.
 
 Expected commit message:
 
 ```text
-feat: add hermes user plugin layout
+feat: add memory wiki skills
 ```
 
 ## Required workflow
