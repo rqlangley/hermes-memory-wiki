@@ -1,10 +1,16 @@
 import pytest
 
 from hermes_memory_wiki.markdown import (
+    HERMES_GENERATED_END,
+    HERMES_GENERATED_START,
+    HERMES_HUMAN_END,
+    HERMES_HUMAN_START,
     WikiMarkdown,
     WikiMarkdownError,
+    ensure_human_notes_block,
     parse_wiki_markdown,
     render_wiki_markdown,
+    replace_managed_block,
 )
 
 
@@ -80,3 +86,118 @@ def test_invalid_yaml_raises_clear_wiki_markdown_error():
 
     with pytest.raises(WikiMarkdownError, match="Invalid YAML frontmatter"):
         parse_wiki_markdown(text)
+
+
+def test_replace_managed_block_replaces_hermes_generated_block():
+    original = f"""# Note
+
+{HERMES_GENERATED_START}
+## Old Heading
+
+Old generated text.
+{HERMES_GENERATED_END}
+"""
+
+    replaced = replace_managed_block(original, "New Heading", "New generated text.")
+
+    assert replaced == f"""# Note
+
+{HERMES_GENERATED_START}
+## New Heading
+
+New generated text.
+{HERMES_GENERATED_END}
+"""
+    assert "Old generated text." not in replaced
+
+
+def test_replace_managed_block_preserves_hermes_human_block():
+    original = f"""{HERMES_GENERATED_START}
+## Managed
+
+Old generated text.
+{HERMES_GENERATED_END}
+
+{HERMES_HUMAN_START}
+## Human Notes
+
+Keep my handwritten note.
+{HERMES_HUMAN_END}
+"""
+
+    replaced = replace_managed_block(original, "Managed", "New generated text.")
+
+    assert f"""{HERMES_HUMAN_START}
+## Human Notes
+
+Keep my handwritten note.
+{HERMES_HUMAN_END}""" in replaced
+    assert "New generated text." in replaced
+    assert "Old generated text." not in replaced
+
+
+def test_managed_helpers_recognize_openclaw_generated_and_human_markers():
+    original = """Intro text.
+
+<!-- openclaw:wiki:generated:start -->
+## Old Managed
+
+Old OpenClaw generated text.
+<!-- openclaw:wiki:generated:end -->
+
+<!-- openclaw:human:start -->
+OpenClaw human note.
+<!-- openclaw:human:end -->
+"""
+
+    replaced = replace_managed_block(original, "New Managed", "New Hermes generated text.")
+
+    assert "<!-- openclaw:wiki:generated:start -->" not in replaced
+    assert HERMES_GENERATED_START in replaced
+    assert "Old OpenClaw generated text." not in replaced
+    assert "New Hermes generated text." in replaced
+    assert "<!-- openclaw:human:start -->\nOpenClaw human note.\n<!-- openclaw:human:end -->" in replaced
+    assert ensure_human_notes_block(original) == original
+
+
+def test_ensure_human_notes_block_adds_missing_human_notes_block():
+    body = f"""{HERMES_GENERATED_START}
+## Managed
+
+Generated text.
+{HERMES_GENERATED_END}
+"""
+
+    ensured = ensure_human_notes_block(body)
+
+    assert ensured == f"""{HERMES_GENERATED_START}
+## Managed
+
+Generated text.
+{HERMES_GENERATED_END}
+
+{HERMES_HUMAN_START}
+## Human Notes
+
+{HERMES_HUMAN_END}
+"""
+
+
+def test_replace_managed_block_never_deletes_text_outside_generated_block():
+    original = f"""Preface paragraph.
+
+{HERMES_GENERATED_START}
+## Managed
+
+Old generated text.
+{HERMES_GENERATED_END}
+
+Appendix paragraph.
+"""
+
+    replaced = replace_managed_block(original, "Managed", "New generated text.")
+
+    assert replaced.startswith("Preface paragraph.\n\n")
+    assert replaced.endswith("\n\nAppendix paragraph.\n")
+    assert "New generated text." in replaced
+    assert "Old generated text." not in replaced
