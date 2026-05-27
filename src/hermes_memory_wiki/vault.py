@@ -47,10 +47,15 @@ def list_wiki_markdown_files(root: Path) -> list[str]:
     files: list[str] = []
     for query_directory in QUERY_DIRS:
         directory = root / query_directory
-        if not directory.is_dir():
+        if directory.is_symlink() or not directory.is_dir():
             continue
         for path in directory.iterdir():
-            if not path.is_file() or path.suffix != ".md" or path.name == "index.md":
+            if (
+                path.is_symlink()
+                or not path.is_file()
+                or path.suffix != ".md"
+                or path.name == "index.md"
+            ):
                 continue
             files.append(path.relative_to(root).as_posix())
     return sorted(files)

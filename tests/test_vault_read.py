@@ -59,6 +59,29 @@ def test_ignores_files_outside_query_dirs_and_missing_query_dirs(tmp_path):
     assert list_wiki_markdown_files(root) == ["reports/weekly.md"]
 
 
+def test_ignores_symlinked_markdown_files_that_escape_vault(tmp_path):
+    root = tmp_path / "vault"
+    _write(root, "sources/good.md", "# Good\n\nSafe.\n")
+    secret = _write(tmp_path / "outside", "secret.md", "# Secret\n\nDo not read.\n")
+    symlink = root / "sources" / "secret.md"
+    symlink.symlink_to(secret)
+
+    assert list_wiki_markdown_files(root) == ["sources/good.md"]
+    assert [page.path for page in read_queryable_pages(root)] == ["sources/good.md"]
+
+
+def test_ignores_symlinked_query_directories_that_escape_vault(tmp_path):
+    root = tmp_path / "vault"
+    root.mkdir()
+    outside_sources = tmp_path / "outside-sources"
+    _write(outside_sources, "secret.md", "# Secret\n\nDo not read.\n")
+    (root / "sources").symlink_to(outside_sources, target_is_directory=True)
+    _write(root, "entities/good.md", "# Good\n\nSafe.\n")
+
+    assert list_wiki_markdown_files(root) == ["entities/good.md"]
+    assert [page.path for page in read_queryable_pages(root)] == ["entities/good.md"]
+
+
 def test_read_queryable_pages_returns_page_summaries_from_raw_content(tmp_path):
     root = tmp_path / "vault"
     _write(
