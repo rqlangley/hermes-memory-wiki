@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 3.2
+**Last updated:** 2026-05-27 after Task 4.1
 
 ## Project
 
@@ -49,6 +49,8 @@ a3f5c7c feat: initialize hermes wiki vault
 4b24e01 fix: reject unsafe vault symlinks
 49ffeab feat: read queryable wiki pages
 496545e fix: ignore unsafe wiki page symlinks
+1f18d13 feat: build wiki keyword search text
+88b157c fix: include wiki body in keyword search text
 ```
 
 Completed tasks:
@@ -269,27 +271,46 @@ Review results:
 - Spec compliance: PASS
 - Code quality: APPROVED after scoped symlink-read safety fix
 
+### Task 4.1 — Build searchable text and snippets
+
+Files:
+
+- `src/hermes_memory_wiki/search_keyword.py`
+- `tests/test_keyword_search.py`
+
+Implemented:
+
+- `build_query_tokens(...)`
+- `build_page_search_text(...)`
+- `build_snippet(...)`
+
+Covered behavior:
+
+- removes generated related blocks from snippet text
+- removes frontmatter from snippet text
+- query tokens deduplicate and ignore tiny tokens
+- exact query line is chosen for snippets
+- fallback snippets choose the first meaningful body line
+- page search text includes summary fields, claims, evidence, and body text without generated blocks
+- nested set values are rendered deterministically
+
+Review results:
+
+- Spec compliance: PASS after scoped body-search-text fix
+- Code quality: APPROVED after scoped body-search-text and deterministic-set-order fixes
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 3.2:
+Latest verification after Task 4.1:
 
 ```bash
-.venv/bin/python -m pytest tests/test_vault_read.py -q
-# 7 passed
+.venv/bin/python -m pytest tests/test_keyword_search.py -q
+# 8 passed
 
 .venv/bin/python -m pytest -q
-# 45 passed
-
-.venv/bin/python -m compileall src tests
-# passed
-
-.venv/bin/python -m pip install -e .
-# passed
-
-.venv/bin/python -c 'import hermes_memory_wiki; print(hermes_memory_wiki.__version__)'
-# 0.1.0
+# 53 passed
 ```
 
 ## Approved design summary
@@ -339,37 +360,50 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 4.1 — Build searchable text and snippets** from the implementation plan.
+Continue with **Task 4.2 — Implement keyword scoring** from the implementation plan.
 
 Files:
 
-- create `src/hermes_memory_wiki/search_keyword.py`
-- create `tests/test_keyword_search.py`
+- modify `src/hermes_memory_wiki/search_keyword.py`
+- modify `tests/test_keyword_search.py`
 
 Required TDD test cases:
 
-- generated related blocks removed from snippet text;
-- frontmatter removed from snippet text;
-- query tokens deduplicate and ignore tiny tokens;
-- exact query line chosen for snippet;
-- fallback snippet chooses first meaningful body line.
+- exact title match outranks body-only match;
+- id/path match boosts score;
+- claim text match returns matched claim metadata;
+- confidence boosts claim score;
+- stale/contested claims score lower;
+- body occurrence boost is capped;
+- nonmatching pages score zero.
 
 Required API:
 
 ```python
-def build_query_tokens(query: str) -> list[str]: ...
-def build_page_search_text(page: WikiPageSummary) -> str: ...
-def build_snippet(raw: str, query: str) -> str: ...
+@dataclass
+class WikiSearchResult:
+    corpus: str
+    path: str
+    title: str
+    kind: str
+    score: float
+    snippet: str
+    search_mode: str
+    matched_claim_id: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+def score_page(page: WikiPageSummary, query: str, mode: str = "auto") -> float: ...
+def keyword_search(pages: Sequence[WikiPageSummary], query: str, *, max_results: int = 10, mode: str = "auto") -> list[WikiSearchResult]: ...
 ```
 
 Reference only:
 
-- OpenClaw `cli-Cx8TeRn1.js:1517-1579`
+- OpenClaw `cli-Cx8TeRn1.js:1632-1918`
 
 Expected commit message:
 
 ```text
-feat: build wiki keyword search text
+feat: rank wiki keyword search results
 ```
 
 ## Required workflow
