@@ -22,9 +22,13 @@ EXPECTED_TOOLS = {
 class FakeContext:
     def __init__(self):
         self.tools = {}
+        self.skills = {}
 
     def register_tool(self, name, toolset, schema, handler, **kwargs):
         self.tools[name] = {"toolset": toolset, "schema": schema, "handler": handler, **kwargs}
+
+    def register_skill(self, name, path, **kwargs):
+        self.skills[name] = {"path": path, **kwargs}
 
 
 def _registered_tools():
