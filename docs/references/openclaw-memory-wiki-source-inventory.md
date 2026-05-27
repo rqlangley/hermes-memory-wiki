@@ -1,6 +1,6 @@
 # OpenClaw memory-wiki source inventory
 
-This document records the local OpenClaw files that should be referenced while implementing Hermes-memory-wiki. The Hermes project must not depend on these files at runtime; they are reference material for behavior, schemas, and edge cases.
+This document records the local OpenClaw files that should be referenced while implementing hermes-memory-wiki. The Hermes project must not depend on these files at runtime; they are reference material for behavior, schemas, and edge cases.
 
 ## Installed OpenClaw context
 
@@ -212,7 +212,7 @@ Important inspected regions:
   - Default search backend is `shared` and corpus is `wiki`.
   - Default render settings preserve human blocks and create backlinks/dashboards.
 
-Hermes-memory-wiki should **not** port bridge or unsafe-local mode for v1.
+hermes-memory-wiki should **not** port bridge or unsafe-local mode for v1.
 
 ## OpenClaw skills to adapt
 
@@ -263,8 +263,8 @@ Important observations:
 - OpenClaw supports memory embedding providers including OpenAI.
 - OpenClaw agent config supports memorySearch vector/hybrid settings.
 - OpenClaw memory-wiki uses shared memory search results when configured with shared backend/corpus; those results may be vector/hybrid.
-- Hermes-memory-wiki should implement its own vector index for wiki documents, not rely on OpenClaw memory-core.
+- hermes-memory-wiki should implement its own vector index for wiki documents, not rely on OpenClaw memory-core.
 
 ## Runtime-dependency rule
 
-Hermes-memory-wiki must not import or shell out to these OpenClaw files during normal operation. They are only a behavioral reference and fixture source.
+hermes-memory-wiki must not import or shell out to these OpenClaw files during normal operation. They are only a behavioral reference and fixture source.

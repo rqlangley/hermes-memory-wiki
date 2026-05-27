@@ -1,6 +1,6 @@
-# Hermes-memory-wiki
+# hermes-memory-wiki
 
-Hermes-memory-wiki is a planned Hermes Agent plugin for managing a persistent markdown knowledge wiki with structured claims, provenance-aware pages, linting, generated indexes/dashboards, and built-in hybrid keyword + vector search.
+hermes-memory-wiki is a planned Hermes Agent plugin for managing a persistent markdown knowledge wiki with structured claims, provenance-aware pages, linting, generated indexes/dashboards, and built-in hybrid keyword + vector search.
 
 This repository currently contains the approved design and implementation planning artifacts. Implementation should follow the project-local plans in [`docs/plans`](docs/plans).
 

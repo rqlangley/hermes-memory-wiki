@@ -1,4 +1,4 @@
-# Hermes-memory-wiki Implementation Plan
+# hermes-memory-wiki Implementation Plan
 
 > **For Hermes:** Use subagent-driven-development skill to implement this plan task-by-task.
 

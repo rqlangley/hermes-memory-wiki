@@ -1,17 +1,17 @@
-# Hermes-memory-wiki Execution Handoff
+# hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27
 
 ## Project
 
 ```text
-/home/langley/projects/Hermes-memory-wiki
+/home/langley/projects/hermes-memory-wiki
 ```
 
 Remote:
 
 ```text
-https://github.com/rqlangley/Hermes-memory-wiki
+https://github.com/rqlangley/hermes-memory-wiki
 ```
 
 Private GitHub repo created with `gh repo create`.
@@ -32,7 +32,7 @@ docs/references/openclaw-memory-wiki-source-inventory.md
 
 ## Approved design summary
 
-Build **Hermes-memory-wiki**, a native Hermes Agent plugin that adds memory-wiki tools and skills without modifying Hermes core.
+Build **hermes-memory-wiki**, a native Hermes Agent plugin that adds memory-wiki tools and skills without modifying Hermes core.
 
 Required capabilities:
 
@@ -74,7 +74,7 @@ Primary local files:
 /home/langley/.npm-global/lib/node_modules/openclaw/dist/extensions/memory-wiki/skills/obsidian-vault-maintainer/SKILL.md
 ```
 
-Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring based. OpenClaw embeddings belong to shared memorySearch/memory-core; Hermes-memory-wiki should implement its own wiki vector index using OpenAI.
+Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring based. OpenClaw embeddings belong to shared memorySearch/memory-core; hermes-memory-wiki should implement its own wiki vector index using OpenAI.
 
 ## Required workflow
 
@@ -83,7 +83,7 @@ Use strict software engineering workflow:
 1. Create implementation branch:
 
 ```bash
-cd /home/langley/projects/Hermes-memory-wiki
+cd /home/langley/projects/hermes-memory-wiki
 git checkout -b feat/initial-hermes-memory-wiki-plugin
 ```
 
@@ -115,7 +115,7 @@ docs/plans/2026-05-27-hermes-memory-wiki-implementation-plan.md
 At minimum:
 
 ```bash
-cd /home/langley/projects/Hermes-memory-wiki
+cd /home/langley/projects/hermes-memory-wiki
 python -m pytest -q
 python -m compileall src tests
 python -m pip install -e .
@@ -132,7 +132,7 @@ HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" pytest tests/l
 ## Pasteable fresh-chat prompt
 
 ```text
-You are implementing Hermes-memory-wiki in /home/langley/projects/Hermes-memory-wiki.
+You are implementing hermes-memory-wiki in /home/langley/projects/hermes-memory-wiki.
 
 Load these skills before acting: software-engineering-rigor, subagent-driven-development, test-driven-development, verification-before-completion, requesting-code-review, receiving-code-review, github-pr-workflow.
 
@@ -142,7 +142,7 @@ Read these project-local artifacts first:
 - docs/plans/2026-05-27-hermes-memory-wiki-execution-handoff.md
 - docs/references/openclaw-memory-wiki-source-inventory.md
 
-Goal: implement a native Hermes Agent plugin named Hermes-memory-wiki. It must add wiki tools and skills without modifying Hermes core. It must include keyword search plus OpenAI-backed vector search from the beginning, with hybrid search default and keyword fallback when embeddings are unavailable.
+Goal: implement a native Hermes Agent plugin named hermes-memory-wiki. It must add wiki tools and skills without modifying Hermes core. It must include keyword search plus OpenAI-backed vector search from the beginning, with hybrid search default and keyword fallback when embeddings are unavailable.
 
 Non-goals: no OpenClaw bridge mode, no migration of the existing OpenClaw wiki, no OpenClaw runtime dependency, no automatic private session/memory ingestion.
 

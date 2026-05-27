@@ -1,4 +1,4 @@
-# Hermes-memory-wiki Design
+# hermes-memory-wiki Design
 
 **Date:** 2026-05-27
 
@@ -6,7 +6,7 @@
 
 ## Goal
 
-Build **Hermes-memory-wiki**, a native Hermes Agent plugin that adds tools and skills for maintaining a persistent markdown memory wiki with structured pages, source-backed claims, generated indexes/dashboards, linting, and built-in hybrid keyword + OpenAI-vector search.
+Build **hermes-memory-wiki**, a native Hermes Agent plugin that adds tools and skills for maintaining a persistent markdown memory wiki with structured pages, source-backed claims, generated indexes/dashboards, linting, and built-in hybrid keyword + OpenAI-vector search.
 
 The plugin should provide the practical wiki-management capabilities of OpenClaw memory-wiki while being additive and reversible for Hermes: installable as a user plugin and activatable through Hermes plugin/tool configuration, with no modification to the default Hermes source install.
 
@@ -14,7 +14,7 @@ The plugin should provide the practical wiki-management capabilities of OpenClaw
 
 1. **No OpenClaw bridge-mode port.** Do not import OpenClaw memory-core artifacts, dream reports, daily notes, event logs, or session memory.
 2. **No migration of the existing OpenClaw wiki.** The OpenClaw vault at `~/.openclaw/wiki/main` is reference material only.
-3. **No runtime dependency on OpenClaw.** OpenClaw bundled JS files may be inspected during implementation, but Hermes-memory-wiki must run without OpenClaw installed.
+3. **No runtime dependency on OpenClaw.** OpenClaw bundled JS files may be inspected during implementation, but hermes-memory-wiki must run without OpenClaw installed.
 4. **No large external vector database for v1.** Use local SQLite and brute-force cosine initially. Add sqlite-vec/FAISS/LanceDB later only if needed.
 5. **No automatic private-session ingestion.** Future import/bridge workflows require separate design because of privacy implications.
 6. **No modification of Hermes core for v1.** Package as a user plugin under `~/.hermes/plugins/memory-wiki` or pip-installable plugin with `hermes_agent.plugins` entry point.
@@ -34,12 +34,12 @@ The plugin should provide the practical wiki-management capabilities of OpenClaw
 
 ## Architecture overview
 
-Hermes-memory-wiki will be a Python package and Hermes plugin.
+hermes-memory-wiki will be a Python package and Hermes plugin.
 
 ```text
 Hermes Agent
   └─ plugin discovery
-      └─ Hermes-memory-wiki plugin
+      └─ hermes-memory-wiki plugin
           ├─ registered tools under toolset: memory_wiki
           ├─ registered plugin skills
           ├─ wiki core library
@@ -52,7 +52,7 @@ Hermes Agent
 Proposed implementation layout:
 
 ```text
-Hermes-memory-wiki/
+hermes-memory-wiki/
   README.md
   pyproject.toml
   src/hermes_memory_wiki/
@@ -385,7 +385,7 @@ Behavior:
 - Store vectors in SQLite.
 - Return embedded/skipped/deleted counts and cost-relevant counts.
 
-No OpenClaw equivalent exists for local wiki vector indexing; this is Hermes-memory-wiki-specific.
+No OpenClaw equivalent exists for local wiki vector indexing; this is hermes-memory-wiki-specific.
 
 ### `wiki_lint`
 
