@@ -1,0 +1,13 @@
+name: memory-wiki
+version: 0.1.0
+kind: standalone
+description: Hermes memory wiki tools with hybrid keyword/vector search.
+provides_tools:
+  - wiki_init
+  - wiki_status
+  - wiki_search
+  - wiki_get
+  - wiki_apply
+  - wiki_compile
+  - wiki_reindex
+  - wiki_lint
