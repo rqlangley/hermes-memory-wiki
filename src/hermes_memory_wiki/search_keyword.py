@@ -43,6 +43,7 @@ class WikiSearchResult:
     matched_claim_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
+
 def build_query_tokens(query: str) -> list[str]:
     """Return stable, unique keyword tokens for a free-text query."""
     tokens: list[str] = []
@@ -139,6 +140,9 @@ def keyword_search(
     pages: Sequence[WikiPageSummary], query: str, *, max_results: int = 10, mode: str = "auto"
 ) -> list[WikiSearchResult]:
     """Return keyword-ranked wiki pages with snippets and matched claim metadata."""
+    if mode not in _VALID_SEARCH_MODES:
+        raise ValueError(f"Unsupported keyword search mode: {mode}")
+
     results: list[WikiSearchResult] = []
     for page in pages:
         score, matched_claim = _score_page_with_claim(page, query, mode)

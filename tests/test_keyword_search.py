@@ -353,3 +353,8 @@ def test_invalid_keyword_search_mode_raises_value_error() -> None:
         score_page(page, "needle", mode="not-a-mode")
     with pytest.raises(ValueError, match="Unsupported keyword search mode"):
         keyword_search([page], "needle", mode="not-a-mode")
+
+
+def test_invalid_keyword_search_mode_raises_value_error_for_empty_pages() -> None:
+    with pytest.raises(ValueError, match="Unsupported keyword search mode"):
+        keyword_search([], "needle", mode="not-a-mode")
