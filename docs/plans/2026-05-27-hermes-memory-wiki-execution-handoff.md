@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 5.5
+**Last updated:** 2026-05-27 after Task 6.1
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists and has been pushed to origin through Task 5.5 after verification, review, and handoff update.
+The feature branch exists and has been pushed to origin through Task 6.1 after verification, review, and handoff update.
 
 Completed commits:
 
@@ -70,6 +70,9 @@ f74e076 fix: protect reindex state on embedding diagnostics
 32649ab docs: update handoff after reindex workflow
 36dff49 feat: search wiki vector index
 3dac371 fix: preserve vector search diagnostics
+a3c9286 docs: update handoff after vector search
+c40d332 feat: add hybrid wiki search
+579f2d6 fix: make hybrid search tests environment-independent
 ```
 
 Completed tasks:
@@ -565,21 +568,63 @@ Non-blocking notes:
 - Query embedding failures currently propagate directly instead of returning diagnostics; acceptable for Task 5.5 because provider failures during query-time search should be surfaced clearly and hybrid fallback handling is Task 6.1.
 - Stored embeddings are loaded provider/model-wide and dimension mismatches fail the search; future hybrid fallback may choose to skip incompatible stale rows instead.
 
+### Task 6.1 — Implement score normalization and rank fusion
+
+Files:
+
+- `src/hermes_memory_wiki/hybrid_search.py`
+- `tests/test_hybrid_search.py`
+
+Implemented:
+
+- `SearchDiagnostics` dataclass for requested/effective search mode, vector availability, and diagnostic messages.
+- `search_wiki(...)` entry point for keyword, vector, and hybrid search modes.
+- Default search mode resolution from `MemoryWikiConfig.search.default_search_mode`, including `auto` normalization to `hybrid` when needed.
+- Keyword-only search using `read_queryable_pages(...)` and `keyword_search(...)` without API keys.
+- Vector-only search using `vector_search(...)` and propagating `VectorSearchResults.diagnostics`.
+- Hybrid score fusion using normalized keyword/vector scores and configured lexical/vector weights.
+- Fusion by page path plus matched claim/document identity to avoid merging distinct claim hits incorrectly.
+- Hybrid fallback to keyword with clear diagnostics when vector search is unavailable.
+
+Covered behavior:
+
+- keyword-only results are returned when vector unavailable;
+- vector-only results are returned for vector mode;
+- hybrid combines same page/claim hits by path and claim id;
+- lexical/vector weights are respected;
+- mode boosts remain applied;
+- diagnostics explain fallback;
+- tests are deterministic whether `OPENAI_API_KEY` is set or unset;
+- `search_mode="auto"` with config default `auto` normalizes to hybrid behavior.
+
+Review results:
+
+- Spec compliance: PASS.
+- Initial code quality: REQUEST_CHANGES; fixed ambient `OPENAI_API_KEY` test dependency and `auto` default handling.
+- Code quality after fixes: APPROVED.
+
+Non-blocking notes:
+
+- Hybrid score metadata currently records normalized component scores and search type provenance for fused results; future UI/tool formatting can decide how much of that metadata to expose.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 5.5:
+Latest verification after Task 6.1:
 
 ```bash
-.venv/bin/python -m pytest tests/test_vector_search.py -q
-# 8 passed
+.venv/bin/python -m pytest tests/test_hybrid_search.py -q
+# 7 passed
 
-.venv/bin/python -m pytest tests/test_vector_index.py tests/test_reindex.py tests/test_vector_search.py -q
-# 31 passed
+OPENAI_API_KEY='***' .venv/bin/python -m pytest tests/test_hybrid_search.py -q
+# 7 passed
+
+.venv/bin/python -m pytest tests/test_keyword_search.py tests/test_vector_search.py tests/test_hybrid_search.py -q
+# 37 passed
 
 .venv/bin/python -m pytest -q
-# 107 passed
+# 114 passed
 
 .venv/bin/python -m compileall src tests
 # passed
@@ -638,35 +683,35 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 6.1 — Implement score normalization and rank fusion** from the implementation plan.
+Continue with **Task 7.1 — Implement lookup and `wiki_get` core** from the implementation plan.
 
 Files:
 
-- create `src/hermes_memory_wiki/hybrid_search.py`
-- create `tests/test_hybrid_search.py`
+- modify `src/hermes_memory_wiki/vault.py`
+- create `tests/test_get.py`
 
 Required TDD test cases:
 
-- keyword-only results are returned when vector unavailable;
-- vector-only results are returned for vector mode;
-- hybrid combines same page hits by path/doc id;
-- lexical/vector weights are respected;
-- mode boosts remain applied;
-- diagnostics explain fallback.
+- exact path lookup;
+- lookup without `.md`;
+- basename lookup;
+- frontmatter id lookup;
+- title lookup;
+- claim id lookup returns parent page;
+- line slicing returns expected content/truncated flag.
 
 Implementation notes:
 
-- expose `SearchDiagnostics` and `search_wiki(...)` as specified in the implementation plan;
-- combine `keyword_search(...)` and `vector_search(...)` without changing either API unless tests require a narrow compatibility polish;
-- consume `VectorSearchResults.diagnostics` from Task 5.5 for vector fallback diagnostics;
-- default hybrid search should degrade cleanly to keyword when embeddings/index/API key are unavailable;
-- no network access in default tests; inject `FakeEmbeddingProvider`/test providers where vector availability is required;
-- do not implement Hermes tool handlers yet (Task 8.1).
+- expose `GetPageResult` and `get_page(...)` as specified in the implementation plan;
+- use existing path safety helpers and queryable page readers where appropriate;
+- preserve vault-root read safety; do not follow unsafe symlink paths;
+- return excerpts/content without frontmatter by default per design;
+- do not implement `wiki_get` Hermes tool registration yet (Task 8.1).
 
 Expected commit message:
 
 ```text
-feat: add hybrid wiki search
+feat: resolve and read wiki pages
 ```
 
 ## Required workflow
