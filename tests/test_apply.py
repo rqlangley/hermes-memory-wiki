@@ -113,7 +113,7 @@ def test_create_synthesis_frontmatter_contains_questions_contradictions_and_conf
         normalize_mutation(
             _base_raw(
                 questions=["How will Project Alpha validate memory quality?"],
-                contradictions=[{"text": "One source says RAG is not in scope."}],
+                contradictions=["One source says RAG is not in scope."],
                 confidence=0.72,
             )
         ),
@@ -121,8 +121,37 @@ def test_create_synthesis_frontmatter_contains_questions_contradictions_and_conf
 
     doc = parse_wiki_markdown((config.vault_path / result.path).read_text(encoding="utf-8"))
     assert doc.frontmatter["questions"] == ["How will Project Alpha validate memory quality?"]
-    assert doc.frontmatter["contradictions"] == [{"text": "One source says RAG is not in scope."}]
+    assert doc.frontmatter["contradictions"] == ["One source says RAG is not in scope."]
     assert doc.frontmatter["confidence"] == 0.72
+
+
+@pytest.mark.parametrize("confidence", [-0.1, 1.1, True, "0.72"])
+def test_normalize_create_synthesis_rejects_invalid_confidence(confidence):
+    with pytest.raises(ValueError, match="confidence"):
+        normalize_mutation(_base_raw(confidence=confidence))
+
+
+@pytest.mark.parametrize("confidence", [0, 1, 0.72])
+def test_normalize_create_synthesis_accepts_valid_confidence(confidence):
+    mutation = normalize_mutation(_base_raw(confidence=confidence))
+
+    assert mutation.confidence == confidence
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "syntheses/foo.txt",
+        "syntheses/nested/foo.md",
+        "notes/foo.md",
+    ],
+)
+def test_create_synthesis_rejects_explicit_non_queryable_path(tmp_path, path):
+    initialize_vault(_config(tmp_path / "vault"))
+    mutation = normalize_mutation(_base_raw(path=path))
+
+    with pytest.raises(ValueError, match=r"syntheses/<name>\.md"):
+        apply_mutation(_config(tmp_path / "vault"), mutation)
 
 
 def test_create_synthesis_writes_generated_summary_and_human_notes_blocks(tmp_path):

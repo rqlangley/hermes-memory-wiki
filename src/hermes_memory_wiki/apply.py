@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import math
 from pathlib import PurePosixPath
 import re
 from typing import Any, Mapping
@@ -29,7 +30,7 @@ class WikiMutation:
     source_ids: list[str]
     claims: list[dict[str, Any]] = field(default_factory=list)
     questions: list[str] = field(default_factory=list)
-    contradictions: list[dict[str, Any]] = field(default_factory=list)
+    contradictions: list[str] = field(default_factory=list)
     confidence: int | float | None = None
     status: str = "draft"
     path: str | None = None
@@ -62,8 +63,8 @@ def normalize_mutation(raw: Mapping[str, Any]) -> WikiMutation:
         source_ids=source_ids,
         claims=_claims(raw.get("claims")),
         questions=_string_list(raw.get("questions")),
-        contradictions=_claims(raw.get("contradictions")),
-        confidence=_optional_number(raw.get("confidence")),
+        contradictions=_string_list(raw.get("contradictions")),
+        confidence=_optional_confidence(raw.get("confidence")),
         status=_optional_string(raw.get("status")) or "draft",
         path=_optional_string(raw.get("path")),
         id=_optional_string(raw.get("id")),
@@ -83,8 +84,7 @@ def _apply_create_synthesis(config: MemoryWikiConfig, mutation: WikiMutation) ->
     page_id = mutation.id or f"synthesis.{PurePosixPath(relative_path).stem}"
     path = safe_join(config.vault_path, relative_path)
     display_path = to_display_path(config.vault_path, path)
-    if PurePosixPath(display_path).parts[:1] != ("syntheses",):
-        raise ValueError("create_synthesis path must be under syntheses/")
+    _validate_synthesis_path(display_path)
 
     created = not path.exists()
     existing_body = ""
@@ -144,12 +144,20 @@ def _optional_string(value: Any) -> str | None:
     return text or None
 
 
-def _optional_number(value: Any) -> int | float | None:
-    if value is None or isinstance(value, bool):
+def _optional_confidence(value: Any) -> int | float | None:
+    if value is None:
         return None
-    if isinstance(value, (int, float)):
-        return value
-    return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("confidence must be a number between 0 and 1")
+    if not math.isfinite(value) or value < 0 or value > 1:
+        raise ValueError("confidence must be a number between 0 and 1")
+    return value
+
+
+def _validate_synthesis_path(display_path: str) -> None:
+    path = PurePosixPath(display_path)
+    if len(path.parts) != 2 or path.parts[0] != "syntheses" or path.suffix != ".md" or not path.stem:
+        raise ValueError("create_synthesis path must match syntheses/<name>.md")
 
 
 def _string_list(value: Any) -> list[str]:
