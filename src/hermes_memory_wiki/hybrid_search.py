@@ -32,6 +32,8 @@ def search_wiki(
     requested_mode = requested_mode.lower().strip() if requested_mode else "hybrid"
     if requested_mode == "auto":
         requested_mode = config.search.default_search_mode.lower().strip() or "hybrid"
+        if requested_mode == "auto":
+            requested_mode = "hybrid"
     if requested_mode not in {"keyword", "vector", "hybrid"}:
         raise ValueError(f"Unsupported wiki search mode: {requested_mode}")
 

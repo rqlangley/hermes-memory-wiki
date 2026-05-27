@@ -75,7 +75,8 @@ def _doc(
     )
 
 
-def test_keyword_only_results_are_returned_when_vector_unavailable(tmp_path) -> None:
+def test_keyword_only_results_are_returned_when_vector_unavailable(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     config = _config(tmp_path)
     _write_page(tmp_path, "concepts/keyword.md", title="Keyword Page", body="offline keyword needle")
 
@@ -196,7 +197,8 @@ def test_mode_boosts_remain_applied(tmp_path) -> None:
     assert all(result.search_mode == "route-question" for result in results)
 
 
-def test_diagnostics_explain_vector_fallback_from_config_default(tmp_path) -> None:
+def test_diagnostics_explain_vector_fallback_from_config_default(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     config = _config(tmp_path, search=SearchConfig(default_search_mode="hybrid"))
     _write_page(tmp_path, "concepts/fallback.md", title="Fallback", body="fallback needle")
 
@@ -208,3 +210,17 @@ def test_diagnostics_explain_vector_fallback_from_config_default(tmp_path) -> No
     assert diagnostics.vector_available is False
     assert any("Falling back to keyword search" in message for message in diagnostics.messages)
     assert any("Missing API key" in message for message in diagnostics.messages)
+
+
+def test_auto_config_default_normalizes_to_hybrid(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    config = _config(tmp_path, search=SearchConfig(default_search_mode="auto"))
+    _write_page(tmp_path, "concepts/auto.md", title="Auto", body="auto fallback needle")
+
+    results, diagnostics = search_wiki(config, "auto fallback needle", search_mode="auto")
+
+    assert [result.path for result in results] == ["concepts/auto.md"]
+    assert diagnostics.requested_mode == "hybrid"
+    assert diagnostics.effective_mode == "keyword"
+    assert diagnostics.vector_available is False
+    assert any("Falling back to keyword search" in message for message in diagnostics.messages)
