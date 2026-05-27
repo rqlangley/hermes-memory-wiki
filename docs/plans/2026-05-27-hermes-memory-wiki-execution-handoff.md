@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 6.1
+**Last updated:** 2026-05-27 after Task 7.1
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists and has been pushed to origin through Task 6.1 after verification, review, and handoff update.
+The feature branch exists and has been pushed to origin through Task 7.1 after verification, review, and handoff update.
 
 Completed commits:
 
@@ -73,6 +73,8 @@ f74e076 fix: protect reindex state on embedding diagnostics
 a3c9286 docs: update handoff after vector search
 c40d332 feat: add hybrid wiki search
 579f2d6 fix: make hybrid search tests environment-independent
+9bee2de docs: update handoff after hybrid search
+e6812ef feat: resolve and read wiki pages
 ```
 
 Completed tasks:
@@ -607,24 +609,56 @@ Non-blocking notes:
 
 - Hybrid score metadata currently records normalized component scores and search type provenance for fused results; future UI/tool formatting can decide how much of that metadata to expose.
 
+### Task 7.1 — Implement lookup and `wiki_get` core
+
+Files:
+
+- `src/hermes_memory_wiki/vault.py`
+- `tests/test_get.py`
+
+Implemented:
+
+- `GetPageResult` dataclass for resolved page metadata, content excerpt, line range metadata, total lines, truncation, and source `WikiPageSummary`.
+- `get_page(...)` resolving queryable pages by exact relative path, path without `.md`, basename/stem, frontmatter id, title, and claim id.
+- Frontmatter-free body excerpting from parsed page summaries.
+- Line slicing with clamped `from_line`/`line_count`, `total_lines`, and `truncated` metadata.
+- Read safety via existing queryable page listing/reading behavior, including symlinked query dirs/files being skipped and traversal-like lookup paths being rejected by path normalization.
+
+Covered behavior:
+
+- exact path lookup;
+- lookup without `.md`;
+- basename lookup;
+- frontmatter id lookup;
+- title lookup;
+- claim id lookup returns parent page;
+- line slicing returns expected content and truncation metadata;
+- missing lookup returns `None`.
+
+Review results:
+
+- Spec compliance: PASS.
+- Code quality: APPROVED.
+
+Non-blocking notes:
+
+- Additional future edge-case tests could cover clamped line ranges, traversal-looking lookups, and symlink exclusion specifically through `get_page(...)`; existing lower-level vault/path tests cover the safety primitives.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 6.1:
+Latest verification after Task 7.1:
 
 ```bash
-.venv/bin/python -m pytest tests/test_hybrid_search.py -q
-# 7 passed
+.venv/bin/python -m pytest tests/test_get.py -q
+# 8 passed
 
-OPENAI_API_KEY='***' .venv/bin/python -m pytest tests/test_hybrid_search.py -q
-# 7 passed
-
-.venv/bin/python -m pytest tests/test_keyword_search.py tests/test_vector_search.py tests/test_hybrid_search.py -q
-# 37 passed
+.venv/bin/python -m pytest tests/test_vault_read.py tests/test_get.py tests/test_paths.py -q
+# 22 passed
 
 .venv/bin/python -m pytest -q
-# 114 passed
+# 122 passed
 
 .venv/bin/python -m compileall src tests
 # passed
@@ -683,35 +717,34 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 7.1 — Implement lookup and `wiki_get` core** from the implementation plan.
+Continue with **Task 7.2 — Implement `create_synthesis` mutation** from the implementation plan.
 
 Files:
 
-- modify `src/hermes_memory_wiki/vault.py`
-- create `tests/test_get.py`
+- create `src/hermes_memory_wiki/apply.py`
+- create `tests/test_apply.py`
 
 Required TDD test cases:
 
-- exact path lookup;
-- lookup without `.md`;
-- basename lookup;
-- frontmatter id lookup;
-- title lookup;
-- claim id lookup returns parent page;
-- line slicing returns expected content/truncated flag.
+- title/body/sourceIds required;
+- slug path is deterministic under `syntheses/`;
+- page id defaults to `synthesis.<slug>`;
+- frontmatter contains claims/sourceIds/status/updatedAt;
+- generated summary block is written;
+- human notes block exists and is preserved on update.
 
 Implementation notes:
 
-- expose `GetPageResult` and `get_page(...)` as specified in the implementation plan;
-- use existing path safety helpers and queryable page readers where appropriate;
-- preserve vault-root read safety; do not follow unsafe symlink paths;
-- return excerpts/content without frontmatter by default per design;
-- do not implement `wiki_get` Hermes tool registration yet (Task 8.1).
+- expose `normalize_mutation(...)` and `apply_mutation(...)` as specified in the implementation plan;
+- implement only `create_synthesis` for Task 7.2; defer `update_metadata` to Task 7.3;
+- use existing markdown render/managed-block helpers and path safety helpers;
+- preserve human notes blocks on update and keep writes under the configured vault root;
+- do not implement Hermes `wiki_apply` tool registration yet (Task 8.1).
 
 Expected commit message:
 
 ```text
-feat: resolve and read wiki pages
+feat: create wiki synthesis mutations
 ```
 
 ## Required workflow
