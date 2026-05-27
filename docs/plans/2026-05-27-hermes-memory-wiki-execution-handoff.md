@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 4.3
+**Last updated:** 2026-05-27 after Task 5.1
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists and has been pushed to origin through Task 4.3 after verification and review.
+The feature branch exists and has been pushed to origin through Task 5.1 after verification and review.
 
 Completed commits:
 
@@ -55,6 +55,9 @@ fb9d7f4 feat: rank wiki keyword search results
 fcd922e feat: add wiki keyword search modes
 021eb6f fix: boost wiki source evidence text matches
 79f80a8 fix: validate empty keyword search modes
+7a5614a feat: add embedding provider interface
+a42cc69 fix: harden embedding response validation
+5a68569 fix: validate embedding response indexes
 ```
 
 Completed tasks:
@@ -362,18 +365,54 @@ Review results:
 - Spec compliance: PASS after scoped evidence-text fix
 - Code quality: APPROVED after scoped empty-search validation polish
 
+### Task 5.1 — Define embedding provider interface and fake provider
+
+Files:
+
+- `src/hermes_memory_wiki/embeddings.py`
+- `tests/test_embeddings.py`
+
+Implemented:
+
+- `EmbeddingProvider` protocol with `provider`, `model`, `dimensions`, and `embed_texts(...)`.
+- `FakeEmbeddingProvider` with deterministic offline vectors and stable dimensions.
+- `OpenAIEmbeddingProvider` using `EmbeddingConfig` defaults, `OPENAI_API_KEY` by default, configurable env var/model/batch size/timeout, and injectable stdlib `urllib` transport.
+- `/v1/embeddings` calls are made only from `embed_texts(...)`.
+- batching preserves input order.
+- clear missing API key diagnostic including provider, model, and env var.
+- OpenAI response validation rejects malformed JSON, non-object/non-list shapes, embedding count mismatches, duplicate/out-of-range indexes, missing/non-list embeddings, and non-numeric embedding values.
+
+Covered behavior:
+
+- fake provider returns deterministic vectors;
+- fake provider vector dimensions are stable;
+- OpenAI provider reports clear missing API key diagnostics;
+- OpenAI batching preserves order;
+- malformed OpenAI responses raise contextual `RuntimeError`s rather than leaking low-level exceptions;
+- duplicate/out-of-range OpenAI response indexes are rejected.
+
+Review results:
+
+- Spec compliance: PASS
+- Code quality: APPROVED after scoped response-validation and index-validation fixes
+
+Non-blocking notes:
+
+- `OpenAIEmbeddingProvider.dimensions` is accepted but not inferred from live responses yet; later vector index integration may establish a stronger dimension contract.
+- Response index validation uses `isinstance(index, int)`; JSON booleans would currently pass the integer check because `bool` subclasses `int` in Python. This is malformed-response hardening only and was accepted as a minor non-blocking quality note.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 4.3:
+Latest verification after Task 5.1:
 
 ```bash
-.venv/bin/python -m pytest tests/test_keyword_search.py -q
-# 22 passed
+.venv/bin/python -m pytest tests/test_embeddings.py -q
+# 9 passed
 
 .venv/bin/python -m pytest -q
-# 67 passed
+# 76 passed
 
 .venv/bin/python -m compileall src tests
 # passed
@@ -432,31 +471,32 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 5.1 — Define embedding provider interface and fake provider** from the implementation plan.
+Continue with **Task 5.2 — Build search documents** from the implementation plan.
 
 Files:
 
-- create `src/hermes_memory_wiki/embeddings.py`
-- create `tests/test_embeddings.py`
+- create `src/hermes_memory_wiki/vector_index.py`
+- create `tests/test_vector_index.py`
 
 Required TDD test cases:
 
-- fake provider returns deterministic vectors;
-- vector dimensions are stable;
-- missing API key diagnostic is clear for OpenAI provider;
-- embedding input batching preserves order.
+- page document includes title/path/kind/claims/questions/body;
+- claim document includes claim text, page title, source ids, evidence;
+- document ids are deterministic;
+- text hash changes when text changes;
+- generated related blocks and frontmatter are excluded from body text.
 
 Implementation notes:
 
-- keep default tests offline and deterministic;
-- OpenAI provider should use the configured/default `OPENAI_API_KEY` env var and call `/v1/embeddings` only when invoked;
-- keep HTTP dependency minimal and mockable;
+- expose `SearchDocument` and `build_search_documents(...)` as specified in the implementation plan;
+- reuse existing markdown/search text helpers where appropriate;
+- keep document IDs and hashes deterministic;
 - no OpenClaw runtime imports or dependencies.
 
 Expected commit message:
 
 ```text
-feat: add embedding provider interface
+feat: build wiki vector search documents
 ```
 
 ## Required workflow
