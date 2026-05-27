@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 5.1
+**Last updated:** 2026-05-27 after Task 5.2
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists and has been pushed to origin through Task 5.1 after verification and review.
+The feature branch exists and has been pushed to origin through Task 5.2 after verification and review.
 
 Completed commits:
 
@@ -59,6 +59,8 @@ fcd922e feat: add wiki keyword search modes
 a42cc69 fix: harden embedding response validation
 5a68569 fix: validate embedding response indexes
 845f673 docs: update handoff after embedding provider
+179827a docs: include handoff update commit
+affbad6 feat: build wiki vector search documents
 ```
 
 Completed tasks:
@@ -402,18 +404,53 @@ Non-blocking notes:
 - `OpenAIEmbeddingProvider.dimensions` is accepted but not inferred from live responses yet; later vector index integration may establish a stronger dimension contract.
 - Response index validation uses `isinstance(index, int)`; JSON booleans would currently pass the integer check because `bool` subclasses `int` in Python. This is malformed-response hardening only and was accepted as a minor non-blocking quality note.
 
+### Task 5.2 — Build search documents
+
+Files:
+
+- `src/hermes_memory_wiki/vector_index.py`
+- `tests/test_vector_index.py`
+
+Implemented:
+
+- `SearchDocument` dataclass with deterministic document metadata.
+- `build_search_documents(...)` for page-level and claim-level embedding/search documents.
+- Stable page document IDs using `page:<path>`.
+- Stable claim document IDs using explicit claim IDs where present and deterministic ordinal/hash fallback otherwise.
+- SHA-256 `text_hash` values derived from document text.
+- Page document text containing title, path, kind, aliases, source IDs, claims, questions, contradictions, and cleaned body text.
+- Claim document text containing page title/path, claim ID/text/status/confidence, page source IDs, and evidence source/kind/path/line/note/text fields.
+- Body cleanup that excludes frontmatter and Hermes/OpenClaw generated related blocks.
+
+Covered behavior:
+
+- page document includes title/path/kind/claims/questions/body;
+- claim document includes claim text, page title, source IDs, and evidence;
+- document IDs are deterministic;
+- text hash changes when text changes;
+- generated related blocks and frontmatter are excluded from body text.
+
+Review results:
+
+- Spec compliance: PASS
+- Code quality: APPROVED
+
+Non-blocking notes:
+
+- `tests/test_vector_index.py` hardcodes the exact fallback short hash for one deterministic ID assertion; accepted as a minor test brittleness note because it documents the current stable ID contract.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 5.1:
+Latest verification after Task 5.2:
 
 ```bash
-.venv/bin/python -m pytest tests/test_embeddings.py -q
-# 9 passed
+.venv/bin/python -m pytest tests/test_vector_index.py -q
+# 5 passed
 
 .venv/bin/python -m pytest -q
-# 76 passed
+# 81 passed
 
 .venv/bin/python -m compileall src tests
 # passed
@@ -472,32 +509,33 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 5.2 — Build search documents** from the implementation plan.
+Continue with **Task 5.3 — Implement SQLite vector index storage** from the implementation plan.
 
 Files:
 
-- create `src/hermes_memory_wiki/vector_index.py`
-- create `tests/test_vector_index.py`
+- modify `src/hermes_memory_wiki/vector_index.py`
+- modify `tests/test_vector_index.py`
 
 Required TDD test cases:
 
-- page document includes title/path/kind/claims/questions/body;
-- claim document includes claim text, page title, source ids, evidence;
-- document ids are deterministic;
-- text hash changes when text changes;
-- generated related blocks and frontmatter are excluded from body text.
+- creates SQLite schema;
+- upserts documents;
+- stores embeddings;
+- skips unchanged embeddings by hash/provider/model;
+- deletes stale documents no longer present;
+- loads all embeddings for a provider/model.
 
 Implementation notes:
 
-- expose `SearchDocument` and `build_search_documents(...)` as specified in the implementation plan;
-- reuse existing markdown/search text helpers where appropriate;
-- keep document IDs and hashes deterministic;
+- expose `VectorIndex` as specified in the implementation plan;
+- store vectors as JSON for v1;
+- preserve deterministic document metadata from Task 5.2;
 - no OpenClaw runtime imports or dependencies.
 
 Expected commit message:
 
 ```text
-feat: build wiki vector search documents
+feat: persist wiki vector index in sqlite
 ```
 
 ## Required workflow
