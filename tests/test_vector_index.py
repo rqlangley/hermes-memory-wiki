@@ -1,8 +1,222 @@
 from __future__ import annotations
 
+import json
+import sqlite3
+from dataclasses import dataclass
+
 from hermes_memory_wiki.markdown import HERMES_GENERATED_END, HERMES_GENERATED_START
 from hermes_memory_wiki.schema import WikiClaim, WikiEvidence, WikiPageSummary
-from hermes_memory_wiki.vector_index import build_search_documents
+from hermes_memory_wiki.vector_index import SearchDocument, VectorIndex, build_search_documents
+
+
+@dataclass(frozen=True)
+class StubEmbeddingProvider:
+    provider: str = "stub"
+    model: str = "stub-model"
+    dimensions: int | None = 3
+
+    def embed_texts(self, texts):  # pragma: no cover - protocol shape only
+        return [[float(index)] * (self.dimensions or 1) for index, _ in enumerate(texts)]
+
+
+def _doc(
+    doc_id: str,
+    *,
+    page_path: str = "topics/example.md",
+    title: str = "Example",
+    text: str | None = None,
+    text_hash: str | None = None,
+    metadata: dict | None = None,
+) -> SearchDocument:
+    text_value = text or f"Text for {doc_id}"
+    return SearchDocument(
+        id=doc_id,
+        page_path=page_path,
+        kind="concept",
+        title=title,
+        doc_type="page",
+        text=text_value,
+        text_hash=text_hash or f"hash-{doc_id}",
+        metadata=metadata or {"ordinal": doc_id},
+    )
+
+
+def test_vector_index_creates_sqlite_schema(tmp_path) -> None:
+    db_path = tmp_path / "nested" / "vector.sqlite3"
+
+    VectorIndex(db_path)
+
+    assert db_path.exists()
+    with sqlite3.connect(db_path) as connection:
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        indexes = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'index'"
+            )
+        }
+        document_columns = [
+            row[1] for row in connection.execute("PRAGMA table_info(documents)")
+        ]
+        embedding_columns = [
+            row[1] for row in connection.execute("PRAGMA table_info(embeddings)")
+        ]
+
+    assert {"documents", "embeddings"} <= tables
+    assert "idx_documents_page_path" in indexes
+    assert "idx_embeddings_provider_model" in indexes
+    assert document_columns == [
+        "id",
+        "page_path",
+        "kind",
+        "title",
+        "doc_type",
+        "text",
+        "text_hash",
+        "updated_at",
+        "metadata_json",
+    ]
+    assert embedding_columns == [
+        "document_id",
+        "provider",
+        "model",
+        "dimensions",
+        "embedding_json",
+        "embedded_at",
+        "text_hash",
+    ]
+
+
+def test_vector_index_upserts_documents(tmp_path) -> None:
+    index = VectorIndex(tmp_path / "vector.sqlite3")
+    original = _doc("page:one", text="Original text", metadata={"version": 1})
+    changed = _doc("page:one", text="Changed text", text_hash="hash-changed", metadata={"version": 2})
+
+    index.upsert_documents([original])
+    index.upsert_documents([changed])
+
+    with sqlite3.connect(tmp_path / "vector.sqlite3") as connection:
+        rows = connection.execute(
+            "SELECT id, text, text_hash, metadata_json FROM documents"
+        ).fetchall()
+
+    assert rows == [
+        ("page:one", "Changed text", "hash-changed", json.dumps({"version": 2}, sort_keys=True))
+    ]
+
+
+def test_vector_index_stores_embeddings(tmp_path) -> None:
+    provider = StubEmbeddingProvider()
+    doc = _doc("page:one")
+    index = VectorIndex(tmp_path / "vector.sqlite3")
+    index.upsert_documents([doc])
+
+    index.store_embeddings(provider, [doc], [[0.1, 0.2, 0.3]], embedded_at="2026-05-27T12:00:00+00:00")
+
+    with sqlite3.connect(tmp_path / "vector.sqlite3") as connection:
+        rows = connection.execute(
+            """
+            SELECT document_id, provider, model, dimensions, embedding_json, embedded_at, text_hash
+            FROM embeddings
+            """
+        ).fetchall()
+
+    assert rows == [
+        (
+            "page:one",
+            "stub",
+            "stub-model",
+            3,
+            json.dumps([0.1, 0.2, 0.3]),
+            "2026-05-27T12:00:00+00:00",
+            doc.text_hash,
+        )
+    ]
+
+
+def test_vector_index_rejects_embedding_count_mismatch(tmp_path) -> None:
+    provider = StubEmbeddingProvider()
+    doc = _doc("page:one")
+    index = VectorIndex(tmp_path / "vector.sqlite3")
+    index.upsert_documents([doc])
+
+    try:
+        index.store_embeddings(provider, [doc], [])
+    except ValueError as error:
+        assert "docs and embeddings length mismatch" in str(error)
+    else:  # pragma: no cover - failure path
+        raise AssertionError("Expected ValueError")
+
+
+def test_vector_index_skips_unchanged_embeddings_by_hash_provider_model(tmp_path) -> None:
+    provider = StubEmbeddingProvider(provider="stub", model="model-a", dimensions=3)
+    other_model = StubEmbeddingProvider(provider="stub", model="model-b", dimensions=3)
+    doc = _doc("page:one")
+    index = VectorIndex(tmp_path / "vector.sqlite3")
+    index.upsert_documents([doc])
+    index.store_embeddings(provider, [doc], [[0.1, 0.2, 0.3]])
+
+    assert index.stale_documents_for_embedding(provider) == []
+    assert index.stale_documents_for_embedding(other_model) == [doc]
+
+    changed = _doc("page:one", text="Changed text", text_hash="hash-changed")
+    index.upsert_documents([changed])
+
+    assert index.stale_documents_for_embedding(provider) == [changed]
+
+
+def test_vector_index_marks_embedding_stale_when_dimensions_differ(tmp_path) -> None:
+    doc = _doc("page:one")
+    stored_provider = StubEmbeddingProvider(dimensions=3)
+    larger_provider = StubEmbeddingProvider(dimensions=4)
+    index = VectorIndex(tmp_path / "vector.sqlite3")
+    index.upsert_documents([doc])
+    index.store_embeddings(stored_provider, [doc], [[0.1, 0.2, 0.3]])
+
+    assert index.stale_documents_for_embedding(larger_provider) == [doc]
+
+
+def test_vector_index_deletes_stale_documents_no_longer_present(tmp_path) -> None:
+    provider = StubEmbeddingProvider()
+    keep = _doc("page:keep")
+    remove = _doc("page:remove")
+    index = VectorIndex(tmp_path / "vector.sqlite3")
+    index.upsert_documents([keep, remove])
+    index.store_embeddings(provider, [keep, remove], [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])
+
+    index.upsert_documents([keep])
+
+    with sqlite3.connect(tmp_path / "vector.sqlite3") as connection:
+        document_ids = [row[0] for row in connection.execute("SELECT id FROM documents")]
+        embedding_ids = [row[0] for row in connection.execute("SELECT document_id FROM embeddings")]
+
+    assert document_ids == ["page:keep"]
+    assert embedding_ids == ["page:keep"]
+
+
+def test_vector_index_loads_all_embeddings_for_provider_model(tmp_path) -> None:
+    provider = StubEmbeddingProvider(provider="stub", model="model-a", dimensions=3)
+    other_provider = StubEmbeddingProvider(provider="other", model="model-a", dimensions=3)
+    docs = [
+        _doc("page:b", page_path="topics/b.md", metadata={"rank": 2}),
+        _doc("page:a", page_path="topics/a.md", metadata={"rank": 1}),
+        _doc("page:c", page_path="topics/c.md", metadata={"rank": 3}),
+    ]
+    index = VectorIndex(tmp_path / "vector.sqlite3")
+    index.upsert_documents(docs)
+    index.store_embeddings(provider, docs[:2], [[0.2, 0.2, 0.2], [0.1, 0.1, 0.1]])
+    index.store_embeddings(other_provider, [docs[2]], [[9.0, 9.0, 9.0]])
+
+    loaded = index.load_embeddings(provider)
+
+    assert [item.document.id for item in loaded] == ["page:a", "page:b"]
+    assert [item.embedding for item in loaded] == [[0.1, 0.1, 0.1], [0.2, 0.2, 0.2]]
+    assert loaded[0].document.metadata == {"rank": 1}
 
 
 def test_page_document_includes_title_path_kind_claims_questions_and_body() -> None:
