@@ -58,6 +58,7 @@ fcd922e feat: add wiki keyword search modes
 7a5614a feat: add embedding provider interface
 a42cc69 fix: harden embedding response validation
 5a68569 fix: validate embedding response indexes
+845f673 docs: update handoff after embedding provider
 ```
 
 Completed tasks:
