@@ -93,12 +93,12 @@ def _tool_specs() -> list[JsonDict]:
     ]
 
 
-def _spec(name: str, description: str, input_schema: JsonDict, handler: Handler) -> JsonDict:
+def _spec(name: str, description: str, schema: JsonDict, handler: Handler) -> JsonDict:
     return {
         "name": name,
         "toolset": TOOLSET,
         "description": description,
-        "input_schema": input_schema,
+        "schema": schema,
         "handler": handler,
     }
 

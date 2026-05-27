@@ -23,8 +23,8 @@ class FakeContext:
     def __init__(self):
         self.tools = {}
 
-    def register_tool(self, name, **entry):
-        self.tools[name] = entry
+    def register_tool(self, name, toolset, schema, handler, **kwargs):
+        self.tools[name] = {"toolset": toolset, "schema": schema, "handler": handler, **kwargs}
 
 
 def _registered_tools():
@@ -49,19 +49,19 @@ def test_register_registers_expected_memory_wiki_tools():
     for name, entry in tools.items():
         assert entry["toolset"] == "memory_wiki"
         assert entry["description"]
-        assert entry["input_schema"]["type"] == "object"
+        assert entry["schema"]["type"] == "object"
         assert callable(entry["handler"])
 
 
 def test_schemas_require_fields_where_relevant():
     tools = _registered_tools()
 
-    assert tools["wiki_search"]["input_schema"]["required"] == ["query"]
-    assert tools["wiki_get"]["input_schema"]["required"] == ["lookup"]
-    assert tools["wiki_apply"]["input_schema"]["required"] == ["op"]
+    assert tools["wiki_search"]["schema"]["required"] == ["query"]
+    assert tools["wiki_get"]["schema"]["required"] == ["lookup"]
+    assert tools["wiki_apply"]["schema"]["required"] == ["op"]
 
     for name in EXPECTED_TOOLS - {"wiki_search", "wiki_get", "wiki_apply"}:
-        assert "required" not in tools[name]["input_schema"] or tools[name]["input_schema"]["required"] == []
+        assert "required" not in tools[name]["schema"] or tools[name]["schema"]["required"] == []
 
 
 def test_wiki_init_handler_returns_text_and_details(tmp_path):
