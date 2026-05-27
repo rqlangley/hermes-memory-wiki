@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 8.2
+**Last updated:** 2026-05-27 after Task 8.3
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists and has been pushed to origin through Task 8.2 after verification, review, and handoff update.
+The feature branch exists and has been pushed to origin through Task 8.3 after verification, review, and handoff update.
 
 Completed commits:
 
@@ -92,6 +92,8 @@ d5160bf feat: update wiki page metadata
 97d7989 fix: use hermes tool schema keyword
 65123b7 docs: update handoff after tool registration
 e1fe2ee feat: add hermes user plugin layout
+678f8ab docs: update handoff after plugin layout
+559b413 feat: add memory wiki skills
 ```
 
 Completed tasks:
@@ -867,21 +869,51 @@ Review results:
 - Spec compliance: PASS.
 - Code quality: APPROVED.
 
+### Task 8.3 — Add plugin skills
+
+Files:
+
+- `src/hermes_memory_wiki/skills/wiki-maintainer/SKILL.md`
+- `src/hermes_memory_wiki/skills/wiki-authoring/SKILL.md`
+- `src/hermes_memory_wiki/skills/wiki-search/SKILL.md`
+- `src/hermes_memory_wiki/plugin.py`
+- `tests/test_skills.py`
+- `tests/test_tools.py`
+
+Implemented:
+
+- Three plugin-bundled Hermes skill documents for maintenance, authoring, and search workflows.
+- Plugin skill registration for `wiki-maintainer`, `wiki-authoring`, and `wiki-search` using package-relative skill paths.
+- Test fake contexts updated to support `register_skill` while preserving tool registration tests.
+
+Covered behavior:
+
+- `register(ctx)` registers three skills;
+- registered skill paths exist and point to expected `SKILL.md` files;
+- skill docs have frontmatter, non-empty bodies, and descriptions;
+- skill docs mention only existing Hermes memory-wiki tools;
+- skill docs avoid OpenClaw/bridge/unsafe-local/Claude references.
+
+Review results:
+
+- Spec compliance: PASS.
+- Code quality: APPROVED.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 8.2:
+Latest verification after Task 8.3:
 
 ```bash
-.venv/bin/python -m pytest tests/test_user_plugin_layout.py -q
-# 2 passed
+.venv/bin/python -m pytest tests/test_skills.py -q
+# 4 passed
 
-.venv/bin/python -m pytest tests/test_user_plugin_layout.py tests/test_tools.py -q
-# 12 passed
+.venv/bin/python -m pytest tests/test_skills.py tests/test_tools.py -q
+# 14 passed
 
 .venv/bin/python -m pytest -q
-# 188 passed
+# 192 passed
 
 .venv/bin/python -m compileall src tests
 # passed
@@ -940,33 +972,34 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 8.3 — Add plugin skills** from the implementation plan.
+Continue with **Task 9.1 — Document installation and configuration** from the implementation plan.
 
 Files:
 
-- create `src/hermes_memory_wiki/skills/wiki-maintainer/SKILL.md`
-- create `src/hermes_memory_wiki/skills/wiki-authoring/SKILL.md`
-- create `src/hermes_memory_wiki/skills/wiki-search/SKILL.md`
-- modify `src/hermes_memory_wiki/plugin.py`
-- modify `tests/test_tools.py` or create `tests/test_skills.py`
+- modify `README.md`
+- create `docs/installation.md`
+- create `docs/configuration.md`
 
-Required TDD test cases:
+Required documentation coverage:
 
-- `register(ctx)` registers three skills;
-- skill paths exist;
-- skill docs mention correct Hermes tools, not OpenClaw CLI commands.
+- pip editable install;
+- user-plugin copy/symlink install;
+- enabling plugin in Hermes config;
+- enabling `memory_wiki` toolset;
+- setting `OPENAI_API_KEY`;
+- disabling embeddings;
+- initializing vault;
+- running first reindex.
 
-Implementation notes:
+Verification notes:
 
-- adapt from the OpenClaw memory-wiki skills listed in the source inventory only as reference material;
-- remove bridge/unsafe-local/OpenClaw CLI references unless documented as non-goals;
-- register skills with `ctx.register_skill("wiki-maintainer", path_to_skill, description="Maintain Hermes memory wiki vaults safely.")`-style calls;
-- keep skills Hermes-native and focused on using `wiki_init`, `wiki_status`, `wiki_search`, `wiki_get`, `wiki_apply`, `wiki_compile`, `wiki_reindex`, and `wiki_lint`.
+- verify docs commands are plausible with non-destructive commands only;
+- use `.venv/bin/python` instead of bare `python` on this host when running verification.
 
 Expected commit message:
 
 ```text
-feat: add memory wiki skills
+docs: add installation and configuration guide
 ```
 
 ## Required workflow
