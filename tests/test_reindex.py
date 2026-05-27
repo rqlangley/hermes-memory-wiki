@@ -19,6 +19,12 @@ class CountingFakeEmbeddingProvider(FakeEmbeddingProvider):
         return super().embed_texts(texts)
 
 
+class RaisingFakeEmbeddingProvider(CountingFakeEmbeddingProvider):
+    def embed_texts(self, texts):
+        self.calls.append(list(texts))
+        raise RuntimeError("upstream timeout")
+
+
 def _config(vault_path) -> MemoryWikiConfig:
     return MemoryWikiConfig(vault_path=vault_path)
 
@@ -173,6 +179,32 @@ def test_missing_api_key_returns_diagnostic_without_corrupting_index(tmp_path, m
     assert len(result.diagnostics) == 1
     assert missing_env in result.diagnostics[0]
     assert _index(config).load_embeddings(previous_provider) == previous_embeddings
+
+
+def test_reindex_provider_failure_does_not_delete_or_mutate_existing_index(tmp_path) -> None:
+    config = _config(tmp_path)
+    initialize_vault(config)
+    _write_page(tmp_path, "concepts/changed.md", title="Changed", body="Original body.")
+    _write_page(tmp_path, "concepts/removed.md", title="Removed", body="Removed body.")
+    provider = CountingFakeEmbeddingProvider()
+    previous_result = reindex_vault(config, provider)
+    assert previous_result.embedded_count == 2
+    before_rows = _index_rows(config)
+
+    _write_page(tmp_path, "concepts/changed.md", title="Changed", body="Changed body.")
+    (tmp_path / "concepts" / "removed.md").unlink()
+    failing_provider = RaisingFakeEmbeddingProvider()
+    result = reindex_vault(config, failing_provider)
+
+    assert result.embedded_count == 0
+    assert result.skipped_count == 0
+    assert result.deleted_count == 1
+    assert result.provider == "fake"
+    assert result.model == "fake-embedding"
+    assert result.dimensions == 8
+    assert len(failing_provider.calls) == 1
+    assert _index_rows(config) == before_rows
+    assert result.diagnostics == ["RuntimeError: upstream timeout"]
 
 
 def test_missing_api_key_does_not_delete_or_mutate_existing_index(tmp_path, monkeypatch) -> None:

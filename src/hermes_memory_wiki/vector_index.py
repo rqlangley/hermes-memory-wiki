@@ -140,6 +140,73 @@ class VectorIndex:
             ).fetchall()
         return [self._document_from_row(row) for row in rows]
 
+    def plan_document_sync(
+        self,
+        docs: Sequence[SearchDocument],
+        provider: EmbeddingProvider,
+        *,
+        force: bool = False,
+    ) -> tuple[int, list[SearchDocument]]:
+        """Determine deletions and embeddings needed without mutating the index."""
+        doc_ids = [doc.id for doc in docs]
+        with self._connection() as connection:
+            deleted_count = self._count_deleted_documents(connection, doc_ids)
+            if force:
+                return deleted_count, list(docs)
+            embedding_rows = self._embedding_state_for_documents(
+                connection, doc_ids, provider
+            )
+
+        documents_to_embed = []
+        for doc in docs:
+            embedding_row = embedding_rows.get(doc.id)
+            if embedding_row is None:
+                documents_to_embed.append(doc)
+                continue
+            text_hash, dimensions = embedding_row
+            if text_hash != doc.text_hash:
+                documents_to_embed.append(doc)
+                continue
+            if provider.dimensions is not None and dimensions != provider.dimensions:
+                documents_to_embed.append(doc)
+        return deleted_count, documents_to_embed
+
+    def sync_documents_and_store_embeddings(
+        self,
+        provider: EmbeddingProvider,
+        docs: Sequence[SearchDocument],
+        docs_to_embed: Sequence[SearchDocument],
+        embeddings: Sequence[Sequence[float]],
+        *,
+        embedded_at: datetime | str | None = None,
+    ) -> int:
+        """Apply document sync/deletions and embedding writes in one transaction."""
+        embedding_rows = self._embedding_rows(
+            provider, docs_to_embed, embeddings, embedded_at=embedded_at
+        )
+        doc_ids = [doc.id for doc in docs]
+        with self._connection() as connection:
+            connection.executemany(
+                """
+                INSERT INTO documents (
+                  id, page_path, kind, title, doc_type, text, text_hash, updated_at, metadata_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                  page_path = excluded.page_path,
+                  kind = excluded.kind,
+                  title = excluded.title,
+                  doc_type = excluded.doc_type,
+                  text = excluded.text,
+                  text_hash = excluded.text_hash,
+                  updated_at = excluded.updated_at,
+                  metadata_json = excluded.metadata_json
+                """,
+                [self._document_row(doc) for doc in docs],
+            )
+            deleted_count = self._delete_documents_not_in(connection, doc_ids)
+            self._insert_embedding_rows(connection, embedding_rows)
+            return deleted_count
+
     def store_embeddings(
         self,
         provider: EmbeddingProvider,
@@ -148,47 +215,9 @@ class VectorIndex:
         *,
         embedded_at: datetime | str | None = None,
     ) -> None:
-        if len(docs) != len(embeddings):
-            raise ValueError("docs and embeddings length mismatch")
-
-        embedded_at_text = self._format_embedded_at(embedded_at)
-        rows = []
-        for doc, embedding in zip(docs, embeddings, strict=True):
-            vector = list(embedding)
-            if provider.dimensions is not None and len(vector) != provider.dimensions:
-                raise ValueError(
-                    "embedding dimension mismatch: "
-                    f"expected {provider.dimensions}, got {len(vector)} for document {doc.id}"
-                )
-            dimensions = provider.dimensions if provider.dimensions is not None else len(vector)
-            rows.append(
-                (
-                    doc.id,
-                    provider.provider,
-                    provider.model,
-                    dimensions,
-                    json.dumps(vector),
-                    embedded_at_text,
-                    doc.text_hash,
-                )
-            )
-
+        rows = self._embedding_rows(provider, docs, embeddings, embedded_at=embedded_at)
         with self._connection() as connection:
-            connection.executemany(
-                """
-                INSERT INTO embeddings (
-                  document_id, provider, model, dimensions, embedding_json, embedded_at, text_hash
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(document_id) DO UPDATE SET
-                  provider = excluded.provider,
-                  model = excluded.model,
-                  dimensions = excluded.dimensions,
-                  embedding_json = excluded.embedding_json,
-                  embedded_at = excluded.embedded_at,
-                  text_hash = excluded.text_hash
-                """,
-                rows,
-            )
+            self._insert_embedding_rows(connection, rows)
 
     def load_embeddings(self, provider: EmbeddingProvider) -> list[StoredEmbedding]:
         dimension_clause = ""
@@ -271,6 +300,108 @@ class VectorIndex:
         )
 
     @staticmethod
+    def _count_deleted_documents(
+        connection: sqlite3.Connection, doc_ids: Sequence[str]
+    ) -> int:
+        if doc_ids:
+            placeholders = ", ".join("?" for _ in doc_ids)
+            return connection.execute(
+                f"SELECT COUNT(*) FROM documents WHERE id NOT IN ({placeholders})",
+                list(doc_ids),
+            ).fetchone()[0]
+        return connection.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+
+    @staticmethod
+    def _delete_documents_not_in(
+        connection: sqlite3.Connection, doc_ids: Sequence[str]
+    ) -> int:
+        if doc_ids:
+            placeholders = ", ".join("?" for _ in doc_ids)
+            cursor = connection.execute(
+                f"DELETE FROM documents WHERE id NOT IN ({placeholders})", list(doc_ids)
+            )
+        else:
+            cursor = connection.execute("DELETE FROM documents")
+        return cursor.rowcount if cursor.rowcount >= 0 else 0
+
+    @staticmethod
+    def _embedding_state_for_documents(
+        connection: sqlite3.Connection,
+        doc_ids: Sequence[str],
+        provider: EmbeddingProvider,
+    ) -> dict[str, tuple[str, int]]:
+        if not doc_ids:
+            return {}
+        placeholders = ", ".join("?" for _ in doc_ids)
+        rows = connection.execute(
+            f"""
+            SELECT document_id, text_hash, dimensions
+            FROM embeddings
+            WHERE provider = ?
+              AND model = ?
+              AND document_id IN ({placeholders})
+            """,
+            [provider.provider, provider.model, *doc_ids],
+        ).fetchall()
+        return {row[0]: (row[1], row[2]) for row in rows}
+
+    @classmethod
+    def _embedding_rows(
+        cls,
+        provider: EmbeddingProvider,
+        docs: Sequence[SearchDocument],
+        embeddings: Sequence[Sequence[float]],
+        *,
+        embedded_at: datetime | str | None = None,
+    ) -> list[tuple[str, str, str, int, str, str, str]]:
+        if len(docs) != len(embeddings):
+            raise ValueError("docs and embeddings length mismatch")
+
+        embedded_at_text = cls._format_embedded_at(embedded_at)
+        rows = []
+        for doc, embedding in zip(docs, embeddings, strict=True):
+            vector = list(embedding)
+            if provider.dimensions is not None and len(vector) != provider.dimensions:
+                raise ValueError(
+                    "embedding dimension mismatch: "
+                    f"expected {provider.dimensions}, got {len(vector)} for document {doc.id}"
+                )
+            dimensions = provider.dimensions if provider.dimensions is not None else len(vector)
+            rows.append(
+                (
+                    doc.id,
+                    provider.provider,
+                    provider.model,
+                    dimensions,
+                    json.dumps(vector),
+                    embedded_at_text,
+                    doc.text_hash,
+                )
+            )
+        return rows
+
+    @staticmethod
+    def _insert_embedding_rows(
+        connection: sqlite3.Connection,
+        rows: Sequence[tuple[str, str, str, int, str, str, str]],
+    ) -> None:
+        connection.executemany(
+            """
+            INSERT INTO embeddings (
+              document_id, provider, model, dimensions, embedding_json, embedded_at, text_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(document_id) DO UPDATE SET
+              provider = excluded.provider,
+              model = excluded.model,
+              dimensions = excluded.dimensions,
+              embedding_json = excluded.embedding_json,
+              embedded_at = excluded.embedded_at,
+              text_hash = excluded.text_hash
+            """,
+            rows,
+        )
+
+    @staticmethod
     def _document_row(doc: SearchDocument) -> tuple[str, str, str, str, str, str, str, str]:
         return (
             doc.id,
@@ -335,10 +466,26 @@ def reindex_vault(
     index = VectorIndex(_default_index_path(config))
     pages = read_queryable_pages(config.vault_path)
     documents = build_search_documents(pages)
-    deleted_count = index.upsert_documents(documents)
-    documents_to_embed = list(documents) if force else index.stale_documents_for_embedding(provider)
+    deleted_count, documents_to_embed = index.plan_document_sync(
+        documents, provider, force=force
+    )
 
     if not documents_to_embed:
+        try:
+            deleted_count = index.sync_documents_and_store_embeddings(
+                provider, documents, [], []
+            )
+        except Exception as exc:
+            diagnostics.append(_format_exception(exc))
+            return ReindexResult(
+                embedded_count=0,
+                skipped_count=0,
+                deleted_count=0,
+                provider=provider.provider,
+                model=provider.model,
+                dimensions=provider.dimensions,
+                diagnostics=diagnostics,
+            )
         return ReindexResult(
             embedded_count=0,
             skipped_count=len(documents),
@@ -351,9 +498,11 @@ def reindex_vault(
 
     try:
         embeddings = provider.embed_texts([document.text for document in documents_to_embed])
-        index.store_embeddings(provider, documents_to_embed, embeddings)
+        deleted_count = index.sync_documents_and_store_embeddings(
+            provider, documents, documents_to_embed, embeddings
+        )
     except Exception as exc:
-        diagnostics.append(str(exc))
+        diagnostics.append(_format_exception(exc))
         return ReindexResult(
             embedded_count=0,
             skipped_count=0,
@@ -375,6 +524,10 @@ def reindex_vault(
     )
 
 
+def _format_exception(exc: Exception) -> str:
+    return f"{type(exc).__name__}: {exc}"
+
+
 def _provider_from_config(
     config: MemoryWikiConfig,
 ) -> tuple[EmbeddingProvider | None, list[str]]:
@@ -393,7 +546,7 @@ def _provider_from_config(
     try:
         return OpenAIEmbeddingProvider(embeddings_config, dimensions=dimensions), []
     except Exception as exc:
-        return None, [str(exc)]
+        return None, [_format_exception(exc)]
 
 
 def _known_openai_dimensions(model: str) -> int | None:
