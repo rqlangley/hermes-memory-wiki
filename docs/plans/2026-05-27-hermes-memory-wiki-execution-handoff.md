@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 3.1
+**Last updated:** 2026-05-27 after Task 3.2
 
 ## Project
 
@@ -47,6 +47,8 @@ d16c59b feat: add vault path safety helpers
 2446d9a feat: preserve wiki managed and human blocks
 a3f5c7c feat: initialize hermes wiki vault
 4b24e01 fix: reject unsafe vault symlinks
+49ffeab feat: read queryable wiki pages
+496545e fix: ignore unsafe wiki page symlinks
 ```
 
 Completed tasks:
@@ -239,18 +241,46 @@ Review results:
 - Spec compliance: PASS
 - Code quality: APPROVED after scoped symlink-safety fix
 
+### Task 3.2 — List and read queryable pages
+
+Files:
+
+- `src/hermes_memory_wiki/vault.py`
+- `tests/test_vault_read.py`
+
+Implemented:
+
+- `QUERY_DIRS`
+- `list_wiki_markdown_files(...)`
+- `read_queryable_pages(...)`
+
+Covered behavior:
+
+- lists immediate `.md` files in query directories
+- returns sorted relative POSIX paths
+- excludes query directory `index.md` files
+- ignores files outside query directories and missing query directories
+- reads pages into `WikiPageSummary` objects with parsed raw markdown body/metadata
+- skips invalid markdown pages without crashing
+- skips symlinked query directories and page files to avoid reading outside the vault
+
+Review results:
+
+- Spec compliance: PASS
+- Code quality: APPROVED after scoped symlink-read safety fix
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 3.1:
+Latest verification after Task 3.2:
 
 ```bash
-.venv/bin/python -m pytest tests/test_vault_init.py -q
+.venv/bin/python -m pytest tests/test_vault_read.py -q
 # 7 passed
 
 .venv/bin/python -m pytest -q
-# 38 passed
+# 45 passed
 
 .venv/bin/python -m compileall src tests
 # passed
@@ -309,38 +339,37 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 3.2 — List and read queryable pages** from the implementation plan.
+Continue with **Task 4.1 — Build searchable text and snippets** from the implementation plan.
 
 Files:
 
-- modify `src/hermes_memory_wiki/vault.py`
-- create `tests/test_vault_read.py`
+- create `src/hermes_memory_wiki/search_keyword.py`
+- create `tests/test_keyword_search.py`
 
 Required TDD test cases:
 
-- lists `.md` files in `sources`, `entities`, `concepts`, `syntheses`, `reports`;
-- excludes directory `index.md`;
-- ignores files outside query dirs;
-- returns summaries with raw content;
-- invalid markdown page is skipped or reported according to selected behavior.
+- generated related blocks removed from snippet text;
+- frontmatter removed from snippet text;
+- query tokens deduplicate and ignore tiny tokens;
+- exact query line chosen for snippet;
+- fallback snippet chooses first meaningful body line.
 
 Required API:
 
 ```python
-QUERY_DIRS = ["entities", "concepts", "sources", "syntheses", "reports"]
-
-def list_wiki_markdown_files(root: Path) -> list[str]: ...
-def read_queryable_pages(root: Path) -> list[WikiPageSummary]: ...
+def build_query_tokens(query: str) -> list[str]: ...
+def build_page_search_text(page: WikiPageSummary) -> str: ...
+def build_snippet(raw: str, query: str) -> str: ...
 ```
 
 Reference only:
 
-- OpenClaw `cli-Cx8TeRn1.js:1461-1483`
+- OpenClaw `cli-Cx8TeRn1.js:1517-1579`
 
 Expected commit message:
 
 ```text
-feat: read queryable wiki pages
+feat: build wiki keyword search text
 ```
 
 ## Required workflow
