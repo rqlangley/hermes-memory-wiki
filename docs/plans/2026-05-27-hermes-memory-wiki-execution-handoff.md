@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 7.5
+**Last updated:** 2026-05-27 after Task 8.1
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists and has been pushed to origin through Task 7.5 after verification, review, and handoff update.
+The feature branch exists and has been pushed to origin through Task 8.1 after verification, review, and handoff update.
 
 Completed commits:
 
@@ -87,6 +87,9 @@ d5160bf feat: update wiki page metadata
 308b590 docs: update handoff after wiki compile
 0cf2b70 feat: lint wiki health and provenance
 0972b13 fix: harden wiki lint checks
+098bda0 docs: update handoff after wiki lint
+56ff35d feat: register hermes wiki tools
+97d7989 fix: use hermes tool schema keyword
 ```
 
 Completed tasks:
@@ -804,21 +807,54 @@ Review results:
 - Spec compliance after fixes: PASS.
 - Code quality after fixes: APPROVED.
 
+### Task 8.1 — Register plugin tools
+
+Files:
+
+- `src/hermes_memory_wiki/tools.py`
+- `src/hermes_memory_wiki/plugin.py`
+- `tests/test_tools.py`
+
+Implemented:
+
+- `register(ctx)` registration flow for Hermes plugin contexts.
+- Toolset constant `memory_wiki`.
+- Hermes-compatible tool registration using `ctx.register_tool(..., schema=..., handler=...)`.
+- Tool handlers for `wiki_init`, `wiki_status`, `wiki_search`, `wiki_get`, `wiki_apply`, `wiki_compile`, `wiki_reindex`, and `wiki_lint`.
+- JSON string response shape with human-readable `text` and structured `details`.
+- Schema required fields for `wiki_search.query`, `wiki_get.lookup`, and `wiki_apply.op`.
+- Handlers delegate to existing core modules without adding new core behavior.
+
+Covered behavior:
+
+- `register(ctx)` registers all expected tools;
+- every tool uses toolset `memory_wiki`;
+- schemas expose required fields where relevant;
+- handlers return JSON text and details;
+- core workflow handlers call existing modules/functions using `vaultPath` override config;
+- tests avoid live OpenAI/network calls via monkeypatching where needed.
+
+Review results:
+
+- Initial spec compliance: FAIL; fixed `input_schema` vs Hermes-compatible `schema` registration keyword.
+- Spec compliance after fix: PASS.
+- Code quality after fix: APPROVED.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 7.5:
+Latest verification after Task 8.1:
 
 ```bash
-.venv/bin/python -m pytest tests/test_lint.py -q
-# 14 passed
+.venv/bin/python -m pytest tests/test_tools.py -q
+# 10 passed
 
-.venv/bin/python -m pytest tests/test_lint.py tests/test_compile.py tests/test_vault_read.py -q
-# 32 passed
+.venv/bin/python -m pytest tests/test_tools.py tests/test_vault_init.py tests/test_get.py tests/test_apply.py tests/test_compile.py tests/test_lint.py tests/test_hybrid_search.py tests/test_reindex.py -q
+# 94 passed
 
 .venv/bin/python -m pytest -q
-# 176 passed
+# 186 passed
 
 .venv/bin/python -m compileall src tests
 # passed
@@ -877,33 +913,34 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 8.1 — Register plugin tools** from the implementation plan.
+Continue with **Task 8.2 — Add plugin manifest for user-plugin layout** from the implementation plan.
 
 Files:
 
-- create `src/hermes_memory_wiki/tools.py`
-- modify `src/hermes_memory_wiki/plugin.py`
-- create `tests/test_tools.py`
+- create `plugin.yaml`
+- create root `__init__.py`
+- create `tests/test_user_plugin_layout.py`
 
 Required TDD test cases:
 
-- `register(ctx)` registers all expected tools;
-- every tool uses toolset `memory_wiki`;
-- schemas reject missing required fields where relevant;
-- handlers return text content and details.
+- root `__init__.py` exposes `register` imported from package;
+- `plugin.yaml` includes expected name and tools.
 
 Implementation notes:
 
-- use a fake context with `register_tool(...)`/`register_skill(...)` as shown in the implementation plan;
-- expected tools: `wiki_init`, `wiki_status`, `wiki_search`, `wiki_get`, `wiki_apply`, `wiki_compile`, `wiki_reindex`, `wiki_lint`;
-- use JSON-schema-like dicts accepted by Hermes `ctx.register_tool`;
-- handlers should call existing core modules (`vault`, `hybrid_search`, `apply`, `compile`, `lint`, `vector_index`) without adding new core behavior;
-- do not implement plugin manifest or bundled skills yet (Tasks 8.2/8.3).
+- `plugin.yaml` should include:
+  - `name: memory-wiki`
+  - `version: 0.1.0`
+  - `kind: standalone`
+  - `description: Hermes memory wiki tools with hybrid keyword/vector search.`
+  - `provides_tools` listing `wiki_init`, `wiki_status`, `wiki_search`, `wiki_get`, `wiki_apply`, `wiki_compile`, `wiki_reindex`, `wiki_lint`.
+- root `__init__.py` should expose `register` from `hermes_memory_wiki.plugin`.
+- Do not implement bundled skills yet (Task 8.3).
 
 Expected commit message:
 
 ```text
-feat: register hermes wiki tools
+feat: add hermes user plugin layout
 ```
 
 ## Required workflow
