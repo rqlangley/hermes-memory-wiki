@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import replace
 
 from hermes_memory_wiki.config import EmbeddingConfig, MemoryWikiConfig
@@ -40,6 +41,21 @@ def _write_page(root, relative_path: str, *, title: str, body: str = "Body text.
 
 def _embedded_ids(config: MemoryWikiConfig, provider: FakeEmbeddingProvider) -> list[str]:
     return [item.document.id for item in _index(config).load_embeddings(provider)]
+
+
+def _index_rows(config: MemoryWikiConfig) -> dict[str, list[tuple]]:
+    db_path = config.vault_path / METADATA_DIRECTORY / "vector" / "index.sqlite"
+    with sqlite3.connect(db_path) as connection:
+        return {
+            "documents": connection.execute(
+                "SELECT id, page_path, kind, title, doc_type, text, text_hash, metadata_json "
+                "FROM documents ORDER BY id"
+            ).fetchall(),
+            "embeddings": connection.execute(
+                "SELECT document_id, provider, model, dimensions, embedding_json, embedded_at, text_hash "
+                "FROM embeddings ORDER BY document_id"
+            ).fetchall(),
+        }
 
 
 def test_reindex_embeds_all_docs_on_first_run(tmp_path) -> None:
@@ -153,7 +169,37 @@ def test_missing_api_key_returns_diagnostic_without_corrupting_index(tmp_path, m
     assert result.deleted_count == 0
     assert result.provider == "openai"
     assert result.model == "text-embedding-3-small"
-    assert result.dimensions is None
+    assert result.dimensions == 1536
     assert len(result.diagnostics) == 1
     assert missing_env in result.diagnostics[0]
     assert _index(config).load_embeddings(previous_provider) == previous_embeddings
+
+
+def test_missing_api_key_does_not_delete_or_mutate_existing_index(tmp_path, monkeypatch) -> None:
+    missing_env = "HERMES_MEMORY_WIKI_TEST_MISSING_OPENAI_API_KEY"
+    monkeypatch.delenv(missing_env, raising=False)
+    config = replace(
+        _config(tmp_path),
+        embeddings=EmbeddingConfig(api_key_env=missing_env),
+    )
+    initialize_vault(config)
+    _write_page(tmp_path, "concepts/changed.md", title="Changed", body="Original body.")
+    _write_page(tmp_path, "concepts/removed.md", title="Removed", body="Removed body.")
+    provider = CountingFakeEmbeddingProvider(model="previous", dimensions=4)
+    previous_result = reindex_vault(config, provider)
+    assert previous_result.embedded_count == 2
+    before_rows = _index_rows(config)
+
+    _write_page(tmp_path, "concepts/changed.md", title="Changed", body="Changed body.")
+    (tmp_path / "concepts" / "removed.md").unlink()
+    result = reindex_vault(config)
+
+    assert result.embedded_count == 0
+    assert result.skipped_count == 0
+    assert result.deleted_count == 0
+    assert result.provider == "openai"
+    assert result.model == "text-embedding-3-small"
+    assert result.dimensions == 1536
+    assert len(result.diagnostics) == 1
+    assert missing_env in result.diagnostics[0]
+    assert _index_rows(config) == before_rows

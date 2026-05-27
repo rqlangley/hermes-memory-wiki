@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import sqlite3
 from contextlib import closing, contextmanager
@@ -34,6 +35,12 @@ _GENERATED_BLOCK_RE = re.compile(
     + r"\n?)",
     flags=re.DOTALL,
 )
+
+_OPENAI_EMBEDDING_DIMENSIONS = {
+    "text-embedding-3-small": 1536,
+    "text-embedding-3-large": 3072,
+    "text-embedding-ada-002": 1536,
+}
 
 
 @dataclass
@@ -310,13 +317,18 @@ def reindex_vault(
         provider, provider_diagnostics = _provider_from_config(config)
         diagnostics.extend(provider_diagnostics)
         if provider is None:
+            dimensions = (
+                _known_openai_dimensions(config.embeddings.model)
+                if config.embeddings.provider == "openai"
+                else None
+            )
             return ReindexResult(
                 embedded_count=0,
                 skipped_count=0,
                 deleted_count=0,
                 provider=config.embeddings.provider,
                 model=config.embeddings.model,
-                dimensions=None,
+                dimensions=dimensions,
                 diagnostics=diagnostics,
             )
 
@@ -371,10 +383,21 @@ def _provider_from_config(
         return None, ["Embeddings are disabled in configuration."]
     if embeddings_config.provider != "openai":
         return None, [f"Unsupported embeddings provider: {embeddings_config.provider}"]
+    dimensions = _known_openai_dimensions(embeddings_config.model)
+    if not os.environ.get(embeddings_config.api_key_env):
+        return None, [
+            "Missing API key for OpenAI embeddings provider "
+            f"(provider=openai, model={embeddings_config.model}). "
+            f"Set environment variable {embeddings_config.api_key_env}."
+        ]
     try:
-        return OpenAIEmbeddingProvider(embeddings_config), []
+        return OpenAIEmbeddingProvider(embeddings_config, dimensions=dimensions), []
     except Exception as exc:
         return None, [str(exc)]
+
+
+def _known_openai_dimensions(model: str) -> int | None:
+    return _OPENAI_EMBEDDING_DIMENSIONS.get(model)
 
 
 def _default_index_path(config: MemoryWikiConfig) -> Path:
