@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists, has been pushed to origin, and was clean/in sync after Task 3.2.
+The feature branch exists, has been pushed to origin, and was clean/in sync after Task 4.2.
 
 Completed commits:
 
@@ -344,6 +344,15 @@ Latest verification after Task 4.2:
 
 .venv/bin/python -m pytest -q
 # 60 passed
+
+.venv/bin/python -m compileall src tests
+# passed
+
+.venv/bin/python -m pip install -e .
+# passed
+
+.venv/bin/python -c 'import hermes_memory_wiki; print(hermes_memory_wiki.__version__)'
+# 0.1.0
 ```
 
 ## Approved design summary
