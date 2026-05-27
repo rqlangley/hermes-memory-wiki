@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 4.2
+**Last updated:** 2026-05-27 after Task 4.3
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists, has been pushed to origin, and was clean/in sync after Task 4.2.
+The feature branch exists and has been pushed to origin through Task 4.3 after verification and review.
 
 Completed commits:
 
@@ -52,6 +52,9 @@ a3f5c7c feat: initialize hermes wiki vault
 1f18d13 feat: build wiki keyword search text
 88b157c fix: include wiki body in keyword search text
 fb9d7f4 feat: rank wiki keyword search results
+fcd922e feat: add wiki keyword search modes
+021eb6f fix: boost wiki source evidence text matches
+79f80a8 fix: validate empty keyword search modes
 ```
 
 Completed tasks:
@@ -332,18 +335,45 @@ Non-blocking notes:
 
 - `keyword_search(..., max_results=<negative>)` currently follows Python slicing semantics; consider normalizing or validating non-positive values when result pagination behavior is hardened.
 
+### Task 4.3 — Add search modes
+
+Files:
+
+- `src/hermes_memory_wiki/search_keyword.py`
+- `tests/test_keyword_search.py`
+
+Implemented:
+
+- search mode validation for `auto`, `find-person`, `route-question`, `source-evidence`, and `raw-claim`
+- mode-specific boosts for person-like pages, route/best-used-for fields, source/evidence metadata, and raw claim matches
+- `route-question` mode can qualify pages from route fields even when general page text does not match
+- unsupported modes raise `ValueError`, including empty-result `keyword_search(...)` calls
+
+Covered behavior:
+
+- `find-person` boosts person-like pages and identifier/alias/person-name matches
+- `route-question` boosts routing and best-used-for matches
+- `source-evidence` boosts source pages and evidence kind/source/path/line/note/text matches
+- `raw-claim` prioritizes pages with matching claims
+- invalid modes raise predictably
+
+Review results:
+
+- Spec compliance: PASS after scoped evidence-text fix
+- Code quality: APPROVED after scoped empty-search validation polish
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 4.2:
+Latest verification after Task 4.3:
 
 ```bash
 .venv/bin/python -m pytest tests/test_keyword_search.py -q
-# 15 passed
+# 22 passed
 
 .venv/bin/python -m pytest -q
-# 60 passed
+# 67 passed
 
 .venv/bin/python -m compileall src tests
 # passed
@@ -402,30 +432,31 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 4.3 — Add search modes** from the implementation plan.
+Continue with **Task 5.1 — Define embedding provider interface and fake provider** from the implementation plan.
 
 Files:
 
-- modify `src/hermes_memory_wiki/search_keyword.py`
-- modify `tests/test_keyword_search.py`
+- create `src/hermes_memory_wiki/embeddings.py`
+- create `tests/test_embeddings.py`
 
 Required TDD test cases:
 
-- `find-person` boosts person-like pages;
-- `route-question` boosts pages with routing/best-used-for fields;
-- `source-evidence` boosts source pages and evidence matches;
-- `raw-claim` prioritizes pages with matching claims;
-- invalid mode raises or defaults predictably.
+- fake provider returns deterministic vectors;
+- vector dimensions are stable;
+- missing API key diagnostic is clear for OpenAI provider;
+- embedding input batching preserves order.
 
-Reference only:
+Implementation notes:
 
-- OpenClaw `cli-Cx8TeRn1.js:1725-1764`
-- OpenClaw `cli-Cx8TeRn1.js:1766-1799`
+- keep default tests offline and deterministic;
+- OpenAI provider should use the configured/default `OPENAI_API_KEY` env var and call `/v1/embeddings` only when invoked;
+- keep HTTP dependency minimal and mockable;
+- no OpenClaw runtime imports or dependencies.
 
 Expected commit message:
 
 ```text
-feat: add wiki keyword search modes
+feat: add embedding provider interface
 ```
 
 ## Required workflow
