@@ -117,15 +117,22 @@ class OpenAIEmbeddingProvider:
                 body,
                 float(self.timeout_seconds),
             )
-            embeddings.extend(_embeddings_from_response(response))
+            embeddings.extend(_embeddings_from_response(response, expected_count=len(batch)))
 
         return embeddings
 
 
-def _embeddings_from_response(response: Mapping[str, Any]) -> list[list[float]]:
+def _embeddings_from_response(
+    response: Mapping[str, Any], *, expected_count: int | None = None
+) -> list[list[float]]:
     data = response.get("data")
     if not isinstance(data, list):
         raise RuntimeError("OpenAI embeddings response did not contain a data list")
+    if expected_count is not None and len(data) != expected_count:
+        raise RuntimeError(
+            "OpenAI embeddings response contained an unexpected embedding count: "
+            f"expected {expected_count}, received {len(data)}"
+        )
 
     ordered_items = sorted(
         enumerate(data),
@@ -140,7 +147,12 @@ def _embeddings_from_response(response: Mapping[str, Any]) -> list[list[float]]:
         embedding = item["embedding"]
         if not isinstance(embedding, list):
             raise RuntimeError("OpenAI embedding value was not a list")
-        embeddings.append([float(value) for value in embedding])
+        try:
+            embeddings.append([float(value) for value in embedding])
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError(
+                "OpenAI embedding response contained a non-numeric embedding value"
+            ) from exc
     return embeddings
 
 
@@ -159,7 +171,10 @@ def _urllib_transport(
     except urllib.error.URLError as exc:
         raise RuntimeError(f"OpenAI embeddings request failed: {exc}") from exc
 
-    parsed = json.loads(response_body)
+    try:
+        parsed = json.loads(response_body)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("OpenAI embeddings response was not valid JSON") from exc
     if not isinstance(parsed, Mapping):
         raise RuntimeError("OpenAI embeddings response was not a JSON object")
     return parsed
