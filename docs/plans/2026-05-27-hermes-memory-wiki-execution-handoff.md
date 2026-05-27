@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 5.4
+**Last updated:** 2026-05-27 after Task 5.5
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists and has been pushed to origin through Task 5.3 after verification and review.
+The feature branch exists and has been pushed to origin through Task 5.5 after verification, review, and handoff update.
 
 Completed commits:
 
@@ -67,6 +67,9 @@ ff52a71 fix: close vector index sqlite connections
 4132993 feat: reindex wiki embeddings incrementally
 f74e076 fix: protect reindex state on embedding diagnostics
 186fad7 fix: apply reindex updates atomically
+32649ab docs: update handoff after reindex workflow
+36dff49 feat: search wiki vector index
+3dac371 fix: preserve vector search diagnostics
 ```
 
 Completed tasks:
@@ -525,21 +528,58 @@ Non-blocking notes:
 
 - On provider failure, `deleted_count` currently reports the planned deletion count even though no mutation is applied. This is acceptable for Task 5.4 because diagnostics indicate failure and the persisted index remains unchanged; a future API polish pass may separate planned and applied deletion counts.
 
+### Task 5.5 — Implement vector search
+
+Files:
+
+- `src/hermes_memory_wiki/vector_index.py`
+- `tests/test_vector_search.py`
+
+Implemented:
+
+- `VectorSearchResults` list-compatible result carrier with observable diagnostics for later hybrid fallback.
+- `cosine_similarity(...)` with zero-vector handling and dimension-mismatch errors.
+- `vector_search(...)` over persisted `VectorIndex` embeddings using provider/model matching and query embedding.
+- Page and claim `WikiSearchResult` conversion with snippets, vector metadata, search mode, scores, and matched claim IDs.
+- Missing index, empty initialized index, disabled/unavailable embeddings, and non-positive max-results behavior return empty list-compatible results without unnecessary query embedding calls.
+- Dimension mismatches between query and stored embeddings raise a clear `ValueError`.
+
+Covered behavior:
+
+- cosine similarity ranks expected fake vectors;
+- vector search embeds query once;
+- returns page and claim results with snippets and metadata;
+- missing and empty indexes are graceful and preserve diagnostics;
+- provider/config unavailability preserves diagnostics without network access;
+- successful vector search exposes empty diagnostics;
+- dimension mismatch is diagnosed.
+
+Review results:
+
+- Initial spec compliance: FAIL; fixed missing true empty-index coverage and discarded diagnostics.
+- Spec compliance after fixes: PASS.
+- Code quality: APPROVED.
+
+Non-blocking notes:
+
+- Query embedding failures currently propagate directly instead of returning diagnostics; acceptable for Task 5.5 because provider failures during query-time search should be surfaced clearly and hybrid fallback handling is Task 6.1.
+- Stored embeddings are loaded provider/model-wide and dimension mismatches fail the search; future hybrid fallback may choose to skip incompatible stale rows instead.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 5.4:
+Latest verification after Task 5.5:
 
 ```bash
-.venv/bin/python -m pytest tests/test_reindex.py -q
+.venv/bin/python -m pytest tests/test_vector_search.py -q
 # 8 passed
 
-.venv/bin/python -m pytest tests/test_vector_index.py tests/test_reindex.py -q
-# 23 passed
+.venv/bin/python -m pytest tests/test_vector_index.py tests/test_reindex.py tests/test_vector_search.py -q
+# 31 passed
 
 .venv/bin/python -m pytest -q
-# 99 passed
+# 107 passed
 
 .venv/bin/python -m compileall src tests
 # passed
@@ -598,34 +638,35 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 5.5 — Implement vector search** from the implementation plan.
+Continue with **Task 6.1 — Implement score normalization and rank fusion** from the implementation plan.
 
 Files:
 
-- modify `src/hermes_memory_wiki/vector_index.py`
-- create `tests/test_vector_search.py`
+- create `src/hermes_memory_wiki/hybrid_search.py`
+- create `tests/test_hybrid_search.py`
 
 Required TDD test cases:
 
-- cosine similarity ranks expected fake vectors;
-- vector search embeds query once;
-- returns page and claim results with snippets/metadata;
-- handles empty/missing index gracefully;
-- dimension mismatch is diagnosed.
+- keyword-only results are returned when vector unavailable;
+- vector-only results are returned for vector mode;
+- hybrid combines same page hits by path/doc id;
+- lexical/vector weights are respected;
+- mode boosts remain applied;
+- diagnostics explain fallback.
 
 Implementation notes:
 
-- expose `cosine_similarity(...)` and `vector_search(...)` as specified in the implementation plan;
-- use `VectorIndex.load_embeddings(...)` and `EmbeddingProvider.embed_texts(...)`;
-- return `WikiSearchResult` objects compatible with keyword/hybrid search;
-- use `FakeEmbeddingProvider` in tests; no network access in default tests;
-- preserve missing-index / unavailable-vector diagnostics for later hybrid fallback;
-- no OpenClaw runtime imports or dependencies.
+- expose `SearchDiagnostics` and `search_wiki(...)` as specified in the implementation plan;
+- combine `keyword_search(...)` and `vector_search(...)` without changing either API unless tests require a narrow compatibility polish;
+- consume `VectorSearchResults.diagnostics` from Task 5.5 for vector fallback diagnostics;
+- default hybrid search should degrade cleanly to keyword when embeddings/index/API key are unavailable;
+- no network access in default tests; inject `FakeEmbeddingProvider`/test providers where vector availability is required;
+- do not implement Hermes tool handlers yet (Task 8.1).
 
 Expected commit message:
 
 ```text
-feat: search wiki vector index
+feat: add hybrid wiki search
 ```
 
 ## Required workflow
