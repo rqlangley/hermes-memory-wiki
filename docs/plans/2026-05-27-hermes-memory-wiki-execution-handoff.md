@@ -1,6 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
-**Date:** 2026-05-27
+**Date:** 2026-05-27  
+**Last updated:** 2026-05-27 after Task 2.2
 
 ## Project
 
@@ -14,20 +15,182 @@ Remote:
 https://github.com/rqlangley/hermes-memory-wiki
 ```
 
-Private GitHub repo created with `gh repo create`.
-
-## Current state
-
-This repo contains planning artifacts only. Implementation has not started.
-
-Important files:
+Feature branch:
 
 ```text
-README.md
-docs/plans/2026-05-27-hermes-memory-wiki-design.md
-docs/plans/2026-05-27-hermes-memory-wiki-implementation-plan.md
-docs/plans/2026-05-27-hermes-memory-wiki-execution-handoff.md
-docs/references/openclaw-memory-wiki-source-inventory.md
+feat/initial-hermes-memory-wiki-plugin
+```
+
+## Source artifacts
+
+Read these before implementing:
+
+- `README.md`
+- `docs/plans/2026-05-27-hermes-memory-wiki-design.md`
+- `docs/plans/2026-05-27-hermes-memory-wiki-implementation-plan.md`
+- `docs/references/openclaw-memory-wiki-source-inventory.md`
+
+The implementation plan remains the source of truth for task order and task-level acceptance criteria. This handoff tracks current execution state and environment-specific notes.
+
+## Current implementation state
+
+The feature branch exists, has been pushed to origin, and was clean/in sync after Task 2.2.
+
+Completed commits:
+
+```text
+7ec0b7e chore: add python package skeleton
+3af2c84 feat: add memory wiki config defaults
+d16c59b feat: add vault path safety helpers
+2555699 feat: parse and render wiki markdown
+0267ccd feat: normalize wiki page summaries
+```
+
+Completed tasks:
+
+### Task 0.1 — Python package skeleton
+
+Files:
+
+- `pyproject.toml`
+- `src/hermes_memory_wiki/__init__.py`
+- `src/hermes_memory_wiki/plugin.py`
+- `tests/test_import.py`
+- `.gitignore`
+
+### Task 1.1 — Config defaults
+
+Files:
+
+- `src/hermes_memory_wiki/config.py`
+- `tests/test_config.py`
+
+Implemented:
+
+- `RenderConfig`
+- `SearchConfig`
+- `EmbeddingConfig`
+- `MemoryWikiConfig`
+- `expand_path(...)`
+- `load_config(...)`
+
+Defaults include:
+
+- vault path: `~/.hermes/wiki/main`
+- search mode: `hybrid`
+- OpenAI embedding model: `text-embedding-3-small`
+- embeddings enabled by default
+- API key env var: `OPENAI_API_KEY`
+
+### Task 1.2 — Vault path safety helpers
+
+Files:
+
+- `src/hermes_memory_wiki/paths.py`
+- `tests/test_paths.py`
+
+Implemented:
+
+- `normalize_relative_path(...)`
+- `safe_join(...)`
+- `to_display_path(...)`
+
+Covered behavior:
+
+- safe paths under root
+- rejects `../outside.md`
+- rejects absolute paths outside root
+- Windows-style backslash normalization
+- relative POSIX display paths
+
+### Task 2.1 — Parse and render wiki markdown frontmatter
+
+Files:
+
+- `src/hermes_memory_wiki/markdown.py`
+- `tests/test_markdown.py`
+- `pyproject.toml` updated with `PyYAML>=6`
+
+Implemented:
+
+- `WikiMarkdown`
+- `WikiMarkdownError`
+- `parse_wiki_markdown(...)`
+- `render_wiki_markdown(...)`
+
+Covered behavior:
+
+- parses markdown with YAML frontmatter
+- parses markdown without frontmatter
+- renders frontmatter/body with trailing newline
+- preserves unknown/nested frontmatter fields
+- body excludes frontmatter delimiters
+- invalid YAML raises `WikiMarkdownError`
+
+Review results:
+
+- Spec compliance: PASS
+- Code quality: APPROVED
+
+Non-blocking notes:
+
+- Parser/render behavior is currently LF-oriented; CRLF frontmatter delimiters are not recognized.
+- `render_wiki_markdown(...)` does not wrap PyYAML serialization failures in `WikiMarkdownError`.
+
+### Task 2.2 — Normalize wiki page summaries
+
+Files:
+
+- `src/hermes_memory_wiki/schema.py`
+- `tests/test_schema.py`
+
+Implemented:
+
+- `WikiEvidence`
+- `WikiClaim`
+- `WikiPageSummary`
+- `PersonCard`
+- `page_kind_from_path(...)`
+- `to_page_summary(...)`
+
+Covered behavior:
+
+- derives kind from `pageType` and path
+- normalizes `id`, `title`, `sourceIds`, `aliases`
+- defaults title from markdown H1 and id from kind/path stem
+- normalizes claims with evidence
+- ignores invalid claim/evidence objects safely
+- normalizes questions and contradictions
+- supports person-card-like and route-question fields
+
+Review results:
+
+- Spec compliance: PASS
+- Code quality: APPROVED
+
+Non-blocking notes:
+
+- `to_page_summary(...)` is typed as `WikiPageSummary | None` but currently always returns a summary or raises from markdown parsing.
+- Frozen dataclasses contain mutable list/dict fields; current usage is acceptable, but immutability is shallow.
+
+## Latest verification
+
+Use `.venv/bin/python`; bare `python` is not available on this host.
+
+Latest verification after Task 2.2:
+
+```bash
+.venv/bin/python -m pytest -q
+# 26 passed
+
+.venv/bin/python -m compileall src tests
+# passed
+
+.venv/bin/python -m pip install -e .
+# passed
+
+.venv/bin/python -c 'import hermes_memory_wiki; print(hermes_memory_wiki.__version__)'
+# 0.1.0
 ```
 
 ## Approved design summary
@@ -38,8 +201,7 @@ Required capabilities:
 
 - initialize/manage a markdown wiki vault;
 - structured page schema for sources/entities/concepts/syntheses/reports;
-- `wiki_status`, `wiki_search`, `wiki_get`, `wiki_apply`, `wiki_lint`;
-- additional `wiki_init`, `wiki_compile`, `wiki_reindex` tools;
+- tools: `wiki_init`, `wiki_status`, `wiki_search`, `wiki_get`, `wiki_apply`, `wiki_lint`, `wiki_compile`, `wiki_reindex`;
 - deterministic keyword search based on OpenClaw memory-wiki behavior;
 - built-in optional OpenAI vector search from the beginning;
 - hybrid search default when embeddings are available;
@@ -56,7 +218,7 @@ Non-goals:
 
 ## OpenClaw source references
 
-Use only as reference material, never runtime dependencies.
+OpenClaw files are reference-only. Do not import or shell out to them at runtime.
 
 Inventory:
 
@@ -76,75 +238,123 @@ Primary local files:
 
 Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring based. OpenClaw embeddings belong to shared memorySearch/memory-core; hermes-memory-wiki should implement its own wiki vector index using OpenAI.
 
+## Next task
+
+Continue with **Task 2.3 — Preserve managed and human blocks** from the implementation plan.
+
+Files:
+
+- modify `src/hermes_memory_wiki/markdown.py`
+- modify `tests/test_markdown.py`
+
+Required TDD test cases:
+
+- `replace_managed_block` replaces Hermes generated block;
+- preserves Hermes human block;
+- recognizes OpenClaw generated/human markers when reading;
+- adds missing human notes block;
+- never deletes text outside generated block.
+
+Required API:
+
+```python
+HERMES_GENERATED_START = "<!-- hermes-wiki:generated:start -->"
+HERMES_GENERATED_END = "<!-- hermes-wiki:generated:end -->"
+HERMES_HUMAN_START = "<!-- hermes-wiki:human:start -->"
+HERMES_HUMAN_END = "<!-- hermes-wiki:human:end -->"
+
+def replace_managed_block(original: str, heading: str, body: str) -> str: ...
+def ensure_human_notes_block(body: str) -> str: ...
+```
+
+Also recognize OpenClaw markers for compatibility:
+
+```html
+<!-- openclaw:wiki:generated:start -->
+<!-- openclaw:wiki:generated:end -->
+<!-- openclaw:human:start -->
+<!-- openclaw:human:end -->
+```
+
+Reference only:
+
+- OpenClaw `cli-Cx8TeRn1.js:2289-2339`
+
+Expected commit message:
+
+```text
+feat: preserve wiki managed and human blocks
+```
+
 ## Required workflow
 
 Use strict software engineering workflow:
 
-1. Create implementation branch:
+1. Start in `/home/langley/projects/hermes-memory-wiki`.
+2. Verify branch and status:
 
-```bash
-cd /home/langley/projects/hermes-memory-wiki
-git checkout -b feat/initial-hermes-memory-wiki-plugin
-```
+   ```bash
+   git status --short --branch
+   ```
 
-2. Follow the implementation plan:
+   Expected branch: `feat/initial-hermes-memory-wiki-plugin`.
 
-```text
-docs/plans/2026-05-27-hermes-memory-wiki-implementation-plan.md
-```
-
-3. Use TDD for every code task:
-   - failing test;
-   - verify failure;
+3. Pull/rebase if needed.
+4. Follow the implementation plan task-by-task.
+5. Use TDD for every code task:
+   - write failing test;
+   - verify RED for expected reason;
    - implement minimal code;
-   - verify pass;
+   - verify GREEN;
+   - run broader tests;
    - commit.
-
-4. Use subagent-driven-development:
+6. Use subagent-driven-development:
    - implementation subagent per task or small phase;
    - spec compliance review first;
    - code quality review second;
    - fix issues before proceeding.
+7. Do not implement bridge mode or OpenClaw runtime imports.
+8. Push branch after successful tasks or milestones.
+9. Open PR only after final verification for the initial plugin implementation.
 
-5. Do not implement bridge mode or OpenClaw runtime imports.
+## Verification commands
 
-6. Push branch and open PR after final verification.
+Use `.venv/bin/python` on this host.
 
-## Final verification commands
-
-At minimum:
+For each focused task, run the targeted tests from the implementation plan plus the full suite:
 
 ```bash
-cd /home/langley/projects/hermes-memory-wiki
-python -m pytest -q
-python -m compileall src tests
-python -m pip install -e .
-python -c 'import hermes_memory_wiki; print(hermes_memory_wiki.__version__)'
-git status --short
+.venv/bin/python -m pytest -q
+```
+
+Before claiming a milestone complete, run:
+
+```bash
+.venv/bin/python -m pytest -q
+.venv/bin/python -m compileall src tests
+.venv/bin/python -m pip install -e .
+.venv/bin/python -c 'import hermes_memory_wiki; print(hermes_memory_wiki.__version__)'
+git status --short --branch
 ```
 
 Optional live OpenAI embeddings test only if explicitly allowed and an API key is configured:
 
 ```bash
-HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" pytest tests/live -v
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live -v
 ```
 
-## Pasteable fresh-chat prompt
+## Minimal pasteable fresh-chat prompt
 
 ```text
-You are implementing hermes-memory-wiki in /home/langley/projects/hermes-memory-wiki.
+Continue implementing hermes-memory-wiki.
 
-Load these skills before acting: software-engineering-rigor, subagent-driven-development, test-driven-development, verification-before-completion, requesting-code-review, receiving-code-review, github-pr-workflow.
+Project: /home/langley/projects/hermes-memory-wiki
+Branch: feat/initial-hermes-memory-wiki-plugin
 
-Read these project-local artifacts first:
-- docs/plans/2026-05-27-hermes-memory-wiki-design.md
-- docs/plans/2026-05-27-hermes-memory-wiki-implementation-plan.md
-- docs/plans/2026-05-27-hermes-memory-wiki-execution-handoff.md
-- docs/references/openclaw-memory-wiki-source-inventory.md
+Before acting, load: software-engineering-rigor, hermes-agent, subagent-driven-development, test-driven-development, verification-before-completion, requesting-code-review, receiving-code-review, github-pr-workflow.
 
-Goal: implement a native Hermes Agent plugin named hermes-memory-wiki. It must add wiki tools and skills without modifying Hermes core. It must include keyword search plus OpenAI-backed vector search from the beginning, with hybrid search default and keyword fallback when embeddings are unavailable.
+Read and follow:
+/home/langley/projects/hermes-memory-wiki/docs/plans/2026-05-27-hermes-memory-wiki-execution-handoff.md
 
-Non-goals: no OpenClaw bridge mode, no migration of the existing OpenClaw wiki, no OpenClaw runtime dependency, no automatic private session/memory ingestion.
-
-Start by creating branch feat/initial-hermes-memory-wiki-plugin. Then execute the implementation plan task-by-task using TDD. Commit after each task or small task group. Use subagent-driven development and two-stage review: spec compliance first, code quality second. Before claiming completion, run final verification from the handoff and push the branch to origin.
+Use the handoff, design, implementation plan, and source inventory as the source of truth. Start by checking `git status --short --branch`, then continue with the next incomplete task using strict TDD, spec review before quality review, incremental commits, verification, and push to origin after successful milestones.
 ```
