@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 7.3
+**Last updated:** 2026-05-27 after Task 7.4
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists and has been pushed to origin through Task 7.3 after verification, review, and handoff update.
+The feature branch exists and has been pushed to origin through Task 7.4 after verification, review, and handoff update.
 
 Completed commits:
 
@@ -81,6 +81,9 @@ aff7ffe feat: create wiki synthesis mutations
 e33cd7a fix: validate synthesis mutation fields
 3981671 docs: update handoff after synthesis mutations
 d5160bf feat: update wiki page metadata
+200c0d0 docs: update handoff after metadata mutations
+10b1d34 feat: compile wiki indexes and caches
+38ca9c3 fix: harden wiki compile outputs
 ```
 
 Completed tasks:
@@ -721,21 +724,59 @@ Non-blocking notes:
 
 - Future hardening could add explicit update_metadata tests for symlink/path-traversal integration and decide whether lookup-only updatedAt-only mutations should be rejected.
 
+### Task 7.4 — Implement compile cache and indexes
+
+Files:
+
+- `src/hermes_memory_wiki/compile.py`
+- `tests/test_compile.py`
+
+Implemented:
+
+- `CompileResult` dataclass and `compile_vault(...)` entry point.
+- Deterministic root `index.md` with page/claim counts and directory links.
+- Deterministic query directory `index.md` files listing pages grouped by kind.
+- `.hermes-wiki/cache/agent-digest.json` with page metadata and aggregate counts.
+- `.hermes-wiki/cache/claims.jsonl` with one claim record per line, including stable claim-document correlation.
+- `.hermes-wiki/cache/search-docs.jsonl` using existing page/claim search document generation.
+- Idempotent writes that skip unchanged output content.
+- Compile log append events only when generated output files update.
+- Symlink hardening for generated output paths, cache/log directories, and log file writes.
+
+Covered behavior:
+
+- root index includes page counts;
+- directory indexes list pages by kind;
+- `agent-digest.json` includes pages and claim counts;
+- `claims.jsonl` contains one claim per line;
+- `search-docs.jsonl` contains page/claim docs;
+- compile is idempotent if nothing changed;
+- compile appends log when files update;
+- generated output/cache/log symlinks are rejected without overwriting outside targets;
+- anonymous claim records correlate with generated claim search documents.
+
+Review results:
+
+- Spec compliance: PASS.
+- Initial code quality: REQUEST_CHANGES; fixed output symlink safety and anonymous claim/search-doc correlation.
+- Spec compliance after fixes: PASS.
+- Code quality after fixes: APPROVED.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 7.3:
+Latest verification after Task 7.4:
 
 ```bash
-.venv/bin/python -m pytest tests/test_apply.py -q
-# 29 passed
+.venv/bin/python -m pytest tests/test_compile.py -q
+# 11 passed
 
-.venv/bin/python -m pytest tests/test_markdown.py tests/test_apply.py tests/test_get.py -q
-# 48 passed
+.venv/bin/python -m pytest tests/test_compile.py tests/test_vault_read.py tests/test_vector_index.py -q
+# 33 passed
 
 .venv/bin/python -m pytest -q
-# 151 passed
+# 162 passed
 
 .venv/bin/python -m compileall src tests
 # passed
@@ -794,35 +835,37 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 7.4 — Implement compile cache and indexes** from the implementation plan.
+Continue with **Task 7.5 — Implement lint** from the implementation plan.
 
 Files:
 
-- create `src/hermes_memory_wiki/compile.py`
-- create `tests/test_compile.py`
+- create `src/hermes_memory_wiki/lint.py`
+- create `tests/test_lint.py`
 
 Required TDD test cases:
 
-- root index includes page counts;
-- directory indexes list pages by kind;
-- `agent-digest.json` includes pages and claim counts;
-- `claims.jsonl` contains one claim per line;
-- `search-docs.jsonl` contains page/claim docs;
-- compile is idempotent if nothing changed;
-- compile appends log when files update.
+- missing claim evidence creates provenance warning;
+- contradictions create contradiction issue;
+- questions create open-question issue;
+- low confidence creates low-confidence issue;
+- stale updatedAt creates stale issue;
+- duplicate ids create schema error;
+- broken source links create broken-link issue;
+- stale vector index creates vector-index warning;
+- lint report written as markdown and JSON.
 
 Implementation notes:
 
-- expose `CompileResult` and `compile_vault(config: MemoryWikiConfig) -> CompileResult` as specified in the implementation plan;
-- use existing `read_queryable_pages(...)` and `build_search_documents(...)` where appropriate;
-- keep dashboard/index set small for v1 and deterministic;
-- write cache files under `.hermes-wiki/cache/` and append compile log only when files update;
-- do not implement Hermes `wiki_compile` tool registration yet (Task 8.1).
+- expose `LintIssue`, `LintResult`, and `lint_vault(config: MemoryWikiConfig) -> LintResult` as specified in the implementation plan;
+- use existing page readers, compile cache/index conventions, and vector index metadata where appropriate;
+- keep lint categories deterministic and scoped to v1 health/provenance checks;
+- write lint report files under `.hermes-wiki/cache/` or another planned metadata location;
+- do not implement Hermes `wiki_lint` tool registration yet (Task 8.1).
 
 Expected commit message:
 
 ```text
-feat: compile wiki indexes and caches
+feat: lint wiki health and provenance
 ```
 
 ## Required workflow
