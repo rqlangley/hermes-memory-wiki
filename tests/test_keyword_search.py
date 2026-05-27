@@ -316,6 +316,24 @@ def test_source_evidence_mode_boosts_source_pages_and_evidence_matches() -> None
     )
 
 
+def test_source_evidence_mode_boosts_evidence_text_matches() -> None:
+    page = _page(
+        "topics/evidence-text.md",
+        "Evidence text",
+        claims=[
+            WikiClaim(
+                id="claim-evidence-text",
+                text="Claim text does not contain the queried phrase.",
+                evidence=[WikiEvidence(text="needle evidence phrase")],
+            )
+        ],
+    )
+
+    assert score_page(page, "needle evidence phrase", mode="source-evidence") > score_page(
+        page, "needle evidence phrase", mode="auto"
+    )
+
+
 def test_raw_claim_mode_prioritizes_pages_with_matching_claims() -> None:
     claim_page = _page(
         "topics/claim.md",

@@ -282,6 +282,7 @@ def _source_evidence_match(page: WikiPageSummary, query_lower: str, tokens: list
             _append_text(values, evidence.path)
             _append_many(values, evidence.lines)
             _append_text(values, evidence.note)
+            _append_text(values, evidence.text)
     return _matches_text("\n".join(values).lower(), query_lower, tokens)
 
 
