@@ -18,6 +18,7 @@ from hermes_memory_wiki.markdown import (
     replace_managed_block,
 )
 from hermes_memory_wiki.paths import safe_join, to_display_path
+from hermes_memory_wiki.vault import get_page
 
 
 @dataclass(frozen=True)
@@ -25,9 +26,9 @@ class WikiMutation:
     """Normalized structured mutation."""
 
     type: str
-    title: str
-    body: str
-    source_ids: list[str]
+    title: str = ""
+    body: str = ""
+    source_ids: list[str] = field(default_factory=list)
     claims: list[dict[str, Any]] = field(default_factory=list)
     questions: list[str] = field(default_factory=list)
     contradictions: list[str] = field(default_factory=list)
@@ -35,6 +36,8 @@ class WikiMutation:
     status: str = "draft"
     path: str | None = None
     id: str | None = None
+    lookup: str | None = None
+    update_fields: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -49,6 +52,8 @@ class ApplyResult:
 def normalize_mutation(raw: Mapping[str, Any]) -> WikiMutation:
     """Validate and normalize a raw structured wiki mutation."""
     mutation_type = _required_string(raw, "op")
+    if mutation_type == "update_metadata":
+        return _normalize_update_metadata(raw)
     if mutation_type != "create_synthesis":
         raise ValueError(f"unsupported mutation op: {mutation_type}")
 
@@ -73,9 +78,76 @@ def normalize_mutation(raw: Mapping[str, Any]) -> WikiMutation:
 
 def apply_mutation(config: MemoryWikiConfig, mutation: WikiMutation) -> ApplyResult:
     """Apply a normalized wiki mutation to the configured vault."""
+    if mutation.type == "update_metadata":
+        return _apply_update_metadata(config, mutation)
     if mutation.type != "create_synthesis":
         raise ValueError(f"unsupported mutation type: {mutation.type}")
     return _apply_create_synthesis(config, mutation)
+
+
+def _normalize_update_metadata(raw: Mapping[str, Any]) -> WikiMutation:
+    update_fields = frozenset(
+        key
+        for key in (
+            "title",
+            "sourceIds",
+            "claims",
+            "questions",
+            "contradictions",
+            "confidence",
+            "status",
+        )
+        if key in raw
+    )
+    return WikiMutation(
+        type="update_metadata",
+        lookup=_required_string(raw, "lookup"),
+        title=_optional_string(raw.get("title")) or "",
+        source_ids=_string_list(raw.get("sourceIds")) if "sourceIds" in raw else [],
+        claims=_claims(raw.get("claims")) if "claims" in raw else [],
+        questions=_string_list(raw.get("questions")) if "questions" in raw else [],
+        contradictions=_string_list(raw.get("contradictions")) if "contradictions" in raw else [],
+        confidence=_optional_confidence(raw.get("confidence")) if "confidence" in raw else None,
+        status=_optional_string(raw.get("status")) or "",
+        update_fields=update_fields,
+    )
+
+
+def _apply_update_metadata(config: MemoryWikiConfig, mutation: WikiMutation) -> ApplyResult:
+    lookup = mutation.lookup or ""
+    page = get_page(config, lookup)
+    if page is None:
+        raise FileNotFoundError(f"wiki page not found for lookup: {lookup}")
+
+    path = safe_join(config.vault_path, page.path)
+    if not path.is_file():
+        raise FileNotFoundError(f"wiki page not found at resolved path: {page.path}")
+
+    doc = parse_wiki_markdown(path.read_text(encoding="utf-8"))
+    frontmatter = dict(doc.frontmatter)
+
+    if "title" in mutation.update_fields and mutation.title:
+        frontmatter["title"] = mutation.title
+    if "sourceIds" in mutation.update_fields:
+        frontmatter["sourceIds"] = mutation.source_ids
+    if "claims" in mutation.update_fields:
+        _set_or_remove(frontmatter, "claims", mutation.claims)
+    if "questions" in mutation.update_fields:
+        _set_or_remove(frontmatter, "questions", mutation.questions)
+    if "contradictions" in mutation.update_fields:
+        _set_or_remove(frontmatter, "contradictions", mutation.contradictions)
+    if "status" in mutation.update_fields:
+        _set_or_remove(frontmatter, "status", mutation.status)
+    if "confidence" in mutation.update_fields:
+        if mutation.confidence is None:
+            frontmatter.pop("confidence", None)
+        else:
+            frontmatter["confidence"] = mutation.confidence
+
+    frontmatter["updatedAt"] = datetime.now(timezone.utc).isoformat()
+    path.write_text(render_wiki_markdown(WikiMarkdown(frontmatter, doc.body)), encoding="utf-8")
+
+    return ApplyResult(path=page.path, id=str(frontmatter.get("id") or page.id), created=False)
 
 
 def _apply_create_synthesis(config: MemoryWikiConfig, mutation: WikiMutation) -> ApplyResult:
@@ -116,6 +188,13 @@ def _apply_create_synthesis(config: MemoryWikiConfig, mutation: WikiMutation) ->
     path.write_text(render_wiki_markdown(WikiMarkdown(frontmatter, body)), encoding="utf-8")
 
     return ApplyResult(path=display_path, id=page_id, created=created)
+
+
+def _set_or_remove(frontmatter: dict[str, Any], key: str, value: Any) -> None:
+    if value:
+        frontmatter[key] = value
+    else:
+        frontmatter.pop(key, None)
 
 
 def _required_string(raw: Mapping[str, Any], key: str) -> str:

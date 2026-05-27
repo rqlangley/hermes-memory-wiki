@@ -54,8 +54,8 @@ def test_normalize_create_synthesis_rejects_missing_op():
 
 
 def test_normalize_create_synthesis_rejects_unsupported_op():
-    with pytest.raises(ValueError, match="unsupported mutation op: update_metadata"):
-        normalize_mutation(_base_raw(op="update_metadata"))
+    with pytest.raises(ValueError, match="unsupported mutation op: delete_page"):
+        normalize_mutation(_base_raw(op="delete_page"))
 
 
 @pytest.mark.parametrize("missing", ["title", "body", "sourceIds"])
@@ -210,3 +210,108 @@ def test_create_synthesis_rejects_explicit_path_outside_vault(tmp_path):
 
     with pytest.raises(ValueError, match="outside vault"):
         apply_mutation(_config(tmp_path / "vault"), mutation)
+
+
+def _update_raw(**overrides):
+    raw = {
+        "op": "update_metadata",
+        "lookup": "synthesis.project-alpha-memory-rag",
+        "sourceIds": [" source.chat-3 ", "source.note-4"],
+        "claims": [{"id": "claim.updated", "text": "Updated metadata claim."}],
+        "status": "published",
+        "confidence": 0.9,
+    }
+    raw.update(overrides)
+    return raw
+
+
+def _create_page(config):
+    return apply_mutation(config, normalize_mutation(_base_raw(confidence=0.4)))
+
+
+def test_normalize_update_metadata_requires_lookup():
+    raw = _update_raw()
+    raw.pop("lookup")
+
+    with pytest.raises(ValueError, match="lookup"):
+        normalize_mutation(raw)
+
+
+def test_update_metadata_missing_page_raises_clear_error(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    mutation = normalize_mutation(_update_raw(lookup="missing.page"))
+
+    with pytest.raises(FileNotFoundError, match=r"wiki page not found.*missing\.page"):
+        apply_mutation(config, mutation)
+
+
+def test_update_metadata_replaces_normalized_source_ids(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    created = _create_page(config)
+
+    result = apply_mutation(
+        config,
+        normalize_mutation(_update_raw(sourceIds=[" source.new ", "", 42])),
+    )
+
+    assert result.created is False
+    assert result.path == created.path
+    doc = parse_wiki_markdown((config.vault_path / created.path).read_text(encoding="utf-8"))
+    assert doc.frontmatter["sourceIds"] == ["source.new", "42"]
+
+
+def test_update_metadata_empty_claims_removes_claims_field(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    created = _create_page(config)
+
+    apply_mutation(config, normalize_mutation(_update_raw(claims=[])))
+
+    doc = parse_wiki_markdown((config.vault_path / created.path).read_text(encoding="utf-8"))
+    assert "claims" not in doc.frontmatter
+
+
+def test_update_metadata_confidence_null_removes_confidence(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    created = _create_page(config)
+
+    apply_mutation(config, normalize_mutation(_update_raw(confidence=None)))
+
+    doc = parse_wiki_markdown((config.vault_path / created.path).read_text(encoding="utf-8"))
+    assert "confidence" not in doc.frontmatter
+
+def test_update_metadata_preserves_body(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    created = _create_page(config)
+    page_path = config.vault_path / created.path
+    original_body = parse_wiki_markdown(page_path.read_text(encoding="utf-8")).body
+
+    apply_mutation(config, normalize_mutation(_update_raw()))
+
+    updated_body = parse_wiki_markdown(page_path.read_text(encoding="utf-8")).body
+    assert updated_body == original_body
+
+
+def test_update_metadata_changes_updated_at(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    created = _create_page(config)
+    page_path = config.vault_path / created.path
+    page_path.write_text(
+        re.sub(
+            r"updatedAt: .+",
+            "updatedAt: 2000-01-01T00:00:00+00:00",
+            page_path.read_text(encoding="utf-8"),
+        ),
+        encoding="utf-8",
+    )
+
+    apply_mutation(config, normalize_mutation(_update_raw()))
+
+    doc = parse_wiki_markdown(page_path.read_text(encoding="utf-8"))
+    assert doc.frontmatter["updatedAt"] != "2000-01-01T00:00:00+00:00"
+    assert re.match(r"^\d{4}-\d{2}-\d{2}T", doc.frontmatter["updatedAt"])
