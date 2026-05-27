@@ -10,7 +10,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterator, Literal, Sequence
 
-from hermes_memory_wiki.embeddings import EmbeddingProvider
+from hermes_memory_wiki.config import MemoryWikiConfig
+from hermes_memory_wiki.embeddings import EmbeddingProvider, OpenAIEmbeddingProvider
 from hermes_memory_wiki.markdown import (
     HERMES_GENERATED_END,
     HERMES_GENERATED_START,
@@ -19,6 +20,7 @@ from hermes_memory_wiki.markdown import (
     parse_wiki_markdown,
 )
 from hermes_memory_wiki.schema import WikiClaim, WikiEvidence, WikiPageSummary
+from hermes_memory_wiki.vault import METADATA_DIRECTORY, read_queryable_pages
 
 _GENERATED_BLOCK_RE = re.compile(
     r"(?:"
@@ -56,14 +58,25 @@ class StoredEmbedding:
     embedded_at: str
 
 
+@dataclass
+class ReindexResult:
+    embedded_count: int
+    skipped_count: int
+    deleted_count: int
+    provider: str
+    model: str
+    dimensions: int | None
+    diagnostics: list[str]
+
 class VectorIndex:
+
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connection() as connection:
             self._create_schema(connection)
 
-    def upsert_documents(self, docs: Sequence[SearchDocument]) -> None:
+    def upsert_documents(self, docs: Sequence[SearchDocument]) -> int:
         doc_ids = [doc.id for doc in docs]
         with self._connection() as connection:
             connection.executemany(
@@ -85,11 +98,12 @@ class VectorIndex:
             )
             if doc_ids:
                 placeholders = ", ".join("?" for _ in doc_ids)
-                connection.execute(
+                cursor = connection.execute(
                     f"DELETE FROM documents WHERE id NOT IN ({placeholders})", doc_ids
                 )
             else:
-                connection.execute("DELETE FROM documents")
+                cursor = connection.execute("DELETE FROM documents")
+            return cursor.rowcount if cursor.rowcount >= 0 else 0
 
     def stale_documents_for_embedding(
         self, provider: EmbeddingProvider
@@ -282,6 +296,89 @@ class VectorIndex:
         if isinstance(value, datetime):
             return value.isoformat()
         return value
+
+
+def reindex_vault(
+    config: MemoryWikiConfig,
+    provider: EmbeddingProvider | None = None,
+    *,
+    force: bool = False,
+) -> ReindexResult:
+    """Incrementally rebuild stored embeddings for queryable wiki pages."""
+    diagnostics: list[str] = []
+    if provider is None:
+        provider, provider_diagnostics = _provider_from_config(config)
+        diagnostics.extend(provider_diagnostics)
+        if provider is None:
+            return ReindexResult(
+                embedded_count=0,
+                skipped_count=0,
+                deleted_count=0,
+                provider=config.embeddings.provider,
+                model=config.embeddings.model,
+                dimensions=None,
+                diagnostics=diagnostics,
+            )
+
+    index = VectorIndex(_default_index_path(config))
+    pages = read_queryable_pages(config.vault_path)
+    documents = build_search_documents(pages)
+    deleted_count = index.upsert_documents(documents)
+    documents_to_embed = list(documents) if force else index.stale_documents_for_embedding(provider)
+
+    if not documents_to_embed:
+        return ReindexResult(
+            embedded_count=0,
+            skipped_count=len(documents),
+            deleted_count=deleted_count,
+            provider=provider.provider,
+            model=provider.model,
+            dimensions=provider.dimensions,
+            diagnostics=diagnostics,
+        )
+
+    try:
+        embeddings = provider.embed_texts([document.text for document in documents_to_embed])
+        index.store_embeddings(provider, documents_to_embed, embeddings)
+    except Exception as exc:
+        diagnostics.append(str(exc))
+        return ReindexResult(
+            embedded_count=0,
+            skipped_count=0,
+            deleted_count=deleted_count,
+            provider=provider.provider,
+            model=provider.model,
+            dimensions=provider.dimensions,
+            diagnostics=diagnostics,
+        )
+
+    return ReindexResult(
+        embedded_count=len(documents_to_embed),
+        skipped_count=len(documents) - len(documents_to_embed),
+        deleted_count=deleted_count,
+        provider=provider.provider,
+        model=provider.model,
+        dimensions=provider.dimensions,
+        diagnostics=diagnostics,
+    )
+
+
+def _provider_from_config(
+    config: MemoryWikiConfig,
+) -> tuple[EmbeddingProvider | None, list[str]]:
+    embeddings_config = config.embeddings
+    if not embeddings_config.enabled:
+        return None, ["Embeddings are disabled in configuration."]
+    if embeddings_config.provider != "openai":
+        return None, [f"Unsupported embeddings provider: {embeddings_config.provider}"]
+    try:
+        return OpenAIEmbeddingProvider(embeddings_config), []
+    except Exception as exc:
+        return None, [str(exc)]
+
+
+def _default_index_path(config: MemoryWikiConfig) -> Path:
+    return config.vault_path / METADATA_DIRECTORY / "vector" / "index.sqlite"
 
 
 def build_search_documents(pages: Sequence[WikiPageSummary]) -> list[SearchDocument]:
