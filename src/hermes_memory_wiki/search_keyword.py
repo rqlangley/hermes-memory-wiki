@@ -28,6 +28,7 @@ _GENERATED_BLOCK_RE = re.compile(
 )
 
 _CONTESTED_STATUSES = {"contested", "contradicted", "retracted", "deprecated", "inactive", "superseded"}
+_VALID_SEARCH_MODES = {"auto", "find-person", "route-question", "source-evidence", "raw-claim"}
 
 
 @dataclass
@@ -181,14 +182,17 @@ def keyword_search(
 
 
 def _score_page_with_claim(page: WikiPageSummary, query: str, mode: str) -> tuple[float, Any | None]:
-    del mode  # Task 4.2 accepts mode but intentionally does not add mode-specific boosts.
+    if mode not in _VALID_SEARCH_MODES:
+        raise ValueError(f"Unsupported keyword search mode: {mode}")
+
     query_lower = query.lower().strip()
     tokens = build_query_tokens(query)
     if not query_lower and not tokens:
         return 0.0, None
 
     search_text = build_page_search_text(page).lower()
-    if not _matches_text(search_text, query_lower, tokens):
+    route_fields_match = _matches_text(_route_question_text(page).lower(), query_lower, tokens)
+    if not _matches_text(search_text, query_lower, tokens) and not (mode == "route-question" and route_fields_match):
         return 0.0, None
 
     score = 1.0
@@ -205,7 +209,80 @@ def _score_page_with_claim(page: WikiPageSummary, query: str, mode: str) -> tupl
         score += best_claim_score
         score += min(10.0, sum(claim_score for claim_score, _claim in matching_claims[1:]))
 
+    score += _mode_boost_score(page, query_lower, tokens, mode, bool(matching_claims), route_fields_match)
+
     return float(score), matched_claim
+
+
+def _mode_boost_score(
+    page: WikiPageSummary,
+    query_lower: str,
+    tokens: list[str],
+    mode: str,
+    has_matching_claims: bool,
+    route_fields_match: bool,
+) -> float:
+    if mode == "auto":
+        return 0.0
+    if mode == "find-person":
+        person_like = _is_person_like(page)
+        score = 24.0 if person_like else -4.0
+        if person_like and _is_person_identifier_match(page, query_lower, tokens):
+            score += 24.0
+        return score
+    if mode == "route-question":
+        score = 14.0 if _is_person_like(page) else 0.0
+        if route_fields_match:
+            score += 32.0
+        return score
+    if mode == "source-evidence":
+        score = 22.0 if page.kind.lower() == "source" else 0.0
+        if _source_evidence_match(page, query_lower, tokens):
+            score += 30.0
+        return score
+    if mode == "raw-claim":
+        return 42.0 if has_matching_claims else 0.0
+    return 0.0
+
+
+def _is_person_like(page: WikiPageSummary) -> bool:
+    return bool(page.kind.lower() == "person" or page.person or page.role or page.person_card is not None)
+
+
+def _is_person_identifier_match(page: WikiPageSummary, query_lower: str, tokens: list[str]) -> bool:
+    values: list[str] = []
+    _append_text(values, page.id)
+    _append_many(values, page.aliases)
+    _append_text(values, page.person)
+    if page.person_card is not None:
+        _append_text(values, page.person_card.name)
+    return _matches_text("\n".join(values).lower(), query_lower, tokens)
+
+
+def _route_question_text(page: WikiPageSummary) -> str:
+    values: list[str] = []
+    _append_many(values, page.best_used_for)
+    _append_many(values, page.routes)
+    _append_any(values, page.routing)
+    if page.person_card is not None:
+        _append_many(values, page.person_card.best_used_for)
+        _append_many(values, page.person_card.routes)
+        _append_any(values, page.person_card.routing)
+    return "\n".join(values)
+
+
+def _source_evidence_match(page: WikiPageSummary, query_lower: str, tokens: list[str]) -> bool:
+    values: list[str] = []
+    _append_text(values, page.path)
+    _append_many(values, page.source_ids)
+    for claim in page.claims:
+        for evidence in claim.evidence:
+            _append_text(values, evidence.kind)
+            _append_text(values, evidence.source_id)
+            _append_text(values, evidence.path)
+            _append_many(values, evidence.lines)
+            _append_text(values, evidence.note)
+    return _matches_text("\n".join(values).lower(), query_lower, tokens)
 
 
 def _metadata_score(page: WikiPageSummary, query_lower: str) -> float:

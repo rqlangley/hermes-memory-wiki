@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
 from hermes_memory_wiki.markdown import HERMES_GENERATED_END, HERMES_GENERATED_START
-from hermes_memory_wiki.schema import WikiClaim, WikiEvidence, WikiPageSummary
+from hermes_memory_wiki.schema import PersonCard, WikiClaim, WikiEvidence, WikiPageSummary
 from hermes_memory_wiki.search_keyword import (
     build_page_search_text,
     build_query_tokens,
@@ -249,3 +251,87 @@ def test_nonmatching_pages_score_zero_and_are_filtered() -> None:
 
     assert score_page(page, "absent-token") == 0
     assert keyword_search([page], "absent-token") == []
+
+
+def test_find_person_mode_boosts_person_like_pages_and_identifier_matches() -> None:
+    person = WikiPageSummary(
+        path="people/langley.md",
+        kind="person",
+        id="person:langley",
+        title="Langley",
+        body="Knows atlas routing.",
+        aliases=["LGL"],
+        person="Langley Human",
+        person_card=PersonCard(name="Langley Human"),
+    )
+    plain = _page("topics/langley.md", "Langley topic", body="Knows atlas routing.")
+
+    assert score_page(person, "langley", mode="find-person") > score_page(person, "langley", mode="auto")
+    assert score_page(plain, "langley", mode="find-person") < score_page(plain, "langley", mode="auto")
+    assert keyword_search([plain, person], "langley", mode="find-person")[0].path == "people/langley.md"
+
+
+def test_route_question_mode_boosts_routing_and_best_used_for_matches() -> None:
+    routed = WikiPageSummary(
+        path="people/routing-owner.md",
+        kind="person",
+        id="person:routing-owner",
+        title="Routing Owner",
+        body="General ownership notes mention invoice triage.",
+        best_used_for=["invoice escalation"],
+        routing={"billing": ["invoice triage", "refund decisions"]},
+        routes=["billing"],
+        person_card=PersonCard(best_used_for=["invoice escalation"], routing={"billing": ["invoice triage"]}),
+    )
+    body_only = _page("topics/body-only.md", "Body only", body="invoice triage")
+
+    assert score_page(routed, "invoice triage", mode="route-question") > score_page(routed, "invoice triage", mode="auto")
+    assert keyword_search([body_only, routed], "invoice triage", mode="route-question")[0].path == "people/routing-owner.md"
+
+
+def test_source_evidence_mode_boosts_source_pages_and_evidence_matches() -> None:
+    source = WikiPageSummary(
+        path="sources/interview-2026.md",
+        kind="source",
+        id="source:interview-2026",
+        title="Interview 2026",
+        body="Q2 budget evidence notes.",
+        source_ids=["interview-2026"],
+    )
+    evidence_page = _page(
+        "topics/budget.md",
+        "Budget",
+        claims=[
+            WikiClaim(
+                id="claim-budget",
+                text="Budget owner is Morgan.",
+                evidence=[WikiEvidence(kind="source", source_id="interview-2026", path="sources/interview-2026.md", note="Q2 budget evidence")],
+            )
+        ],
+    )
+
+    assert score_page(source, "interview-2026", mode="source-evidence") > score_page(source, "interview-2026", mode="auto")
+    assert score_page(evidence_page, "q2 budget evidence", mode="source-evidence") > score_page(
+        evidence_page, "q2 budget evidence", mode="auto"
+    )
+
+
+def test_raw_claim_mode_prioritizes_pages_with_matching_claims() -> None:
+    claim_page = _page(
+        "topics/claim.md",
+        "Claim page",
+        claims=[WikiClaim(id="claim-needle", text="Needle claim belongs here.")],
+    )
+    body_page = _page("topics/body.md", "Needle claim belongs here", body="Needle claim belongs here.")
+
+    assert score_page(claim_page, "needle claim", mode="raw-claim") > score_page(claim_page, "needle claim", mode="auto")
+    assert keyword_search([body_page, claim_page], "needle claim", mode="raw-claim")[0].path == "topics/claim.md"
+
+
+def test_invalid_keyword_search_mode_raises_value_error() -> None:
+    page = _page("topics/needle.md", "Needle", body="needle")
+
+    with pytest.raises(ValueError, match="Unsupported keyword search mode"):
+        score_page(page, "needle", mode="not-a-mode")
+    with pytest.raises(ValueError, match="Unsupported keyword search mode"):
+        keyword_search([page], "needle", mode="not-a-mode")
