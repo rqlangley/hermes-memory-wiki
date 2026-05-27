@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 2.2
+**Last updated:** 2026-05-27 after Task 2.3
 
 ## Project
 
@@ -44,6 +44,7 @@ Completed commits:
 d16c59b feat: add vault path safety helpers
 2555699 feat: parse and render wiki markdown
 0267ccd feat: normalize wiki page summaries
+2446d9a feat: preserve wiki managed and human blocks
 ```
 
 Completed tasks:
@@ -173,15 +174,53 @@ Non-blocking notes:
 - `to_page_summary(...)` is typed as `WikiPageSummary | None` but currently always returns a summary or raises from markdown parsing.
 - Frozen dataclasses contain mutable list/dict fields; current usage is acceptable, but immutability is shallow.
 
+### Task 2.3 — Preserve managed and human blocks
+
+Files:
+
+- `src/hermes_memory_wiki/markdown.py`
+- `tests/test_markdown.py`
+
+Implemented:
+
+- `HERMES_GENERATED_START`
+- `HERMES_GENERATED_END`
+- `HERMES_HUMAN_START`
+- `HERMES_HUMAN_END`
+- OpenClaw compatibility marker constants
+- `replace_managed_block(...)`
+- `ensure_human_notes_block(...)`
+
+Covered behavior:
+
+- replaces Hermes generated blocks
+- preserves Hermes human blocks
+- recognizes OpenClaw generated and human markers
+- adds missing Hermes human notes blocks
+- preserves text outside generated blocks
+- writes new/replaced generated blocks with Hermes markers
+
+Review results:
+
+- Spec compliance: PASS
+- Code quality: APPROVED
+
+Non-blocking notes:
+
+- `_append_block(...)` normalizes trailing whitespace when appending a new block via `text.rstrip()`; acceptable for current markdown output, but adjust later if byte-for-byte preservation outside managed blocks becomes required.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 2.2:
+Latest verification after Task 2.3:
 
 ```bash
+.venv/bin/python -m pytest tests/test_markdown.py -q
+# 11 passed
+
 .venv/bin/python -m pytest -q
-# 26 passed
+# 31 passed
 
 .venv/bin/python -m compileall src tests
 # passed
@@ -240,50 +279,42 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 2.3 — Preserve managed and human blocks** from the implementation plan.
+Continue with **Task 3.1 — Initialize vault structure** from the implementation plan.
 
 Files:
 
-- modify `src/hermes_memory_wiki/markdown.py`
-- modify `tests/test_markdown.py`
+- create `src/hermes_memory_wiki/vault.py`
+- create `tests/test_vault_init.py`
 
 Required TDD test cases:
 
-- `replace_managed_block` replaces Hermes generated block;
-- preserves Hermes human block;
-- recognizes OpenClaw generated/human markers when reading;
-- adds missing human notes block;
-- never deletes text outside generated block.
+- initialization creates required directories/files;
+- second initialization is idempotent;
+- existing `inbox.md` content is not overwritten;
+- log entry is appended only when something changed;
+- metadata directory is `.hermes-wiki`.
 
 Required API:
 
 ```python
-HERMES_GENERATED_START = "<!-- hermes-wiki:generated:start -->"
-HERMES_GENERATED_END = "<!-- hermes-wiki:generated:end -->"
-HERMES_HUMAN_START = "<!-- hermes-wiki:human:start -->"
-HERMES_HUMAN_END = "<!-- hermes-wiki:human:end -->"
+@dataclass
+class InitResult:
+    root: Path
+    created: bool
+    created_directories: list[Path]
+    created_files: list[Path]
 
-def replace_managed_block(original: str, heading: str, body: str) -> str: ...
-def ensure_human_notes_block(body: str) -> str: ...
-```
-
-Also recognize OpenClaw markers for compatibility:
-
-```html
-<!-- openclaw:wiki:generated:start -->
-<!-- openclaw:wiki:generated:end -->
-<!-- openclaw:human:start -->
-<!-- openclaw:human:end -->
+def initialize_vault(config: MemoryWikiConfig, *, now: datetime | None = None) -> InitResult: ...
 ```
 
 Reference only:
 
-- OpenClaw `cli-Cx8TeRn1.js:2289-2339`
+- OpenClaw `cli-Cx8TeRn1.js:473-508`
 
 Expected commit message:
 
 ```text
-feat: preserve wiki managed and human blocks
+feat: initialize hermes wiki vault
 ```
 
 ## Required workflow
