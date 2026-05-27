@@ -8,9 +8,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from hermes_memory_wiki.config import MemoryWikiConfig
+from hermes_memory_wiki.markdown import WikiMarkdownError
+from hermes_memory_wiki.schema import WikiPageSummary, to_page_summary
 
 
 METADATA_DIRECTORY = ".hermes-wiki"
+QUERY_DIRS = ["entities", "concepts", "sources", "syntheses", "reports"]
 
 _REQUIRED_DIRECTORIES = [
     Path("sources"),
@@ -37,6 +40,34 @@ class InitResult:
     created: bool
     created_directories: list[Path]
     created_files: list[Path]
+
+
+def list_wiki_markdown_files(root: Path) -> list[str]:
+    """List immediate Markdown pages from queryable wiki directories."""
+    files: list[str] = []
+    for query_directory in QUERY_DIRS:
+        directory = root / query_directory
+        if not directory.is_dir():
+            continue
+        for path in directory.iterdir():
+            if not path.is_file() or path.suffix != ".md" or path.name == "index.md":
+                continue
+            files.append(path.relative_to(root).as_posix())
+    return sorted(files)
+
+
+def read_queryable_pages(root: Path) -> list[WikiPageSummary]:
+    """Read queryable wiki Markdown files into normalized page summaries."""
+    pages: list[WikiPageSummary] = []
+    for relative_path in list_wiki_markdown_files(root):
+        raw = (root / relative_path).read_text(encoding="utf-8")
+        try:
+            summary = to_page_summary(relative_path, raw)
+        except WikiMarkdownError:
+            continue
+        if summary is not None:
+            pages.append(summary)
+    return pages
 
 
 def initialize_vault(
