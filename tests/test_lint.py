@@ -4,7 +4,7 @@ import json
 
 from hermes_memory_wiki.config import MemoryWikiConfig
 from hermes_memory_wiki.lint import lint_vault
-from hermes_memory_wiki.vector_index import VectorIndex, build_search_documents
+from hermes_memory_wiki.vector_index import SearchDocument, VectorIndex, build_search_documents
 from hermes_memory_wiki.vault import METADATA_DIRECTORY, initialize_vault, read_queryable_pages
 
 
@@ -159,6 +159,64 @@ def test_duplicate_ids_create_schema_error(tmp_path):
     assert issues[0].details["paths"] == ["concepts/one.md", "concepts/two.md"]
 
 
+def test_invalid_markdown_creates_schema_error(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(
+        root,
+        "concepts/invalid.md",
+        """---
+id: [unterminated
+title: Invalid
+pageType: concept
+updatedAt: 2026-05-01T00:00:00+00:00
+---
+# Invalid
+""",
+    )
+
+    result = lint_vault(_config(root))
+
+    issues = _issues_by_code(result, "invalid-markdown")
+    assert len(issues) == 1
+    assert issues[0].severity == "error"
+    assert issues[0].category == "schema"
+    assert issues[0].path == "concepts/invalid.md"
+
+
+def test_duplicate_claim_ids_create_schema_error(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(
+        root,
+        "concepts/one.md",
+        _page(
+            page_id="concept:one",
+            title="One",
+            claims="  - id: claim:duplicate\n    text: First claim.\n    evidence:\n      - text: observed\n",
+        ),
+    )
+    _write(
+        root,
+        "concepts/two.md",
+        _page(
+            page_id="concept:two",
+            title="Two",
+            claims="  - id: claim:duplicate\n    text: Second claim.\n    evidence:\n      - text: observed\n",
+        ),
+    )
+
+    result = lint_vault(_config(root))
+
+    issues = _issues_by_code(result, "duplicate-claim-id")
+    assert len(issues) == 1
+    assert issues[0].severity == "error"
+    assert issues[0].category == "schema"
+    assert issues[0].claim_id == "claim:duplicate"
+    assert issues[0].details["id"] == "claim:duplicate"
+    assert issues[0].details["paths"] == ["concepts/one.md", "concepts/two.md"]
+
+
 def test_broken_source_links_create_broken_link_issue(tmp_path):
     root = tmp_path / "vault"
     initialize_vault(_config(root))
@@ -199,6 +257,68 @@ def test_stale_vector_index_creates_vector_index_warning(tmp_path):
     assert issues[0].path == "concepts/vector.md"
 
 
+def test_missing_and_extra_vector_documents_create_vector_index_warnings(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(root, "concepts/vector.md", _page(title="Vector"))
+    extra_doc = SearchDocument(
+        id="page:concepts/removed.md",
+        page_path="concepts/removed.md",
+        kind="concept",
+        title="Removed",
+        doc_type="page",
+        text="Removed document",
+        text_hash="removed-hash",
+        metadata={},
+    )
+    index = VectorIndex(root / METADATA_DIRECTORY / "vector" / "index.sqlite")
+    index.upsert_documents([extra_doc])
+
+    result = lint_vault(_config(root))
+
+    issues = _issues_by_code(result, "stale-vector-index")
+    assert len(issues) == 2
+    assert {issue.category for issue in issues} == {"vector-index"}
+    assert {issue.severity for issue in issues} == {"warning"}
+    assert {issue.path for issue in issues} == {"concepts/vector.md", None}
+    assert {issue.details.get("documentId") for issue in issues} == {
+        "page:concepts/vector.md",
+        "page:concepts/removed.md",
+    }
+
+
+def test_symlinked_vector_directory_is_not_followed(tmp_path):
+    root = tmp_path / "vault"
+    outside = tmp_path / "outside-vector"
+    initialize_vault(_config(root))
+    _write(root, "concepts/vector.md", _page(title="Vector"))
+    outside.mkdir()
+    extra_doc = SearchDocument(
+        id="page:outside.md",
+        page_path="outside.md",
+        kind="concept",
+        title="Outside",
+        doc_type="page",
+        text="Outside document",
+        text_hash="outside-hash",
+        metadata={},
+    )
+    VectorIndex(outside / "index.sqlite").upsert_documents([extra_doc])
+    vector_dir = root / METADATA_DIRECTORY / "vector"
+    vector_dir.rmdir()
+    vector_dir.symlink_to(outside, target_is_directory=True)
+
+    result = lint_vault(_config(root))
+
+    issues = _issues_by_code(result, "stale-vector-index")
+    assert len(issues) == 1
+    assert issues[0].severity == "warning"
+    assert issues[0].category == "vector-index"
+    assert "symlink" in issues[0].message.lower()
+    assert issues[0].details["indexPath"] == f"{METADATA_DIRECTORY}/vector"
+    assert "documentId" not in issues[0].details
+
+
 def test_lint_report_written_as_markdown_and_json(tmp_path):
     root = tmp_path / "vault"
     initialize_vault(_config(root))
@@ -217,3 +337,18 @@ def test_lint_report_written_as_markdown_and_json(tmp_path):
     assert payload["version"] == 1
     assert payload["summary"]["issueCount"] == len(result.issues)
     assert payload["issues"][0]["code"] == "open-question"
+
+
+def test_second_lint_with_unchanged_reports_has_no_updated_files(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(root, "concepts/report.md", _page(questions=("Document this?",)))
+
+    first = lint_vault(_config(root))
+    first_markdown = first.markdown_path.read_text(encoding="utf-8")
+    first_json = first.json_path.read_text(encoding="utf-8")
+    second = lint_vault(_config(root))
+
+    assert second.updated_files == []
+    assert second.markdown_path.read_text(encoding="utf-8") == first_markdown
+    assert second.json_path.read_text(encoding="utf-8") == first_json

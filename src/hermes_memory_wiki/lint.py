@@ -268,8 +268,13 @@ def _broken_link_issue(
 
 
 def _vector_index_issues(root: Path, pages: Sequence[WikiPageSummary]) -> list[LintIssue]:
-    db_path = root / METADATA_DIRECTORY / "vector" / "index.sqlite"
-    if not db_path.exists() or db_path.is_symlink():
+    metadata_dir = root / METADATA_DIRECTORY
+    vector_dir = metadata_dir / "vector"
+    db_path = vector_dir / "index.sqlite"
+    for path in (metadata_dir, vector_dir, db_path):
+        if path.is_symlink():
+            return [_unsafe_vector_index_issue(root, path)]
+    if not db_path.exists():
         return []
     try:
         stored = _stored_vector_documents(db_path)
@@ -316,6 +321,16 @@ def _stored_vector_documents(db_path: Path) -> dict[str, str]:
     with sqlite3.connect(db_path) as connection:
         rows = connection.execute("SELECT id, text_hash FROM documents ORDER BY id").fetchall()
     return {str(doc_id): str(text_hash) for doc_id, text_hash in rows}
+
+
+def _unsafe_vector_index_issue(root: Path, path: Path) -> LintIssue:
+    return LintIssue(
+        severity="warning",
+        category="vector-index",
+        code="stale-vector-index",
+        message="Vector index was not inspected because its metadata path is a symlink.",
+        details={"indexPath": path.relative_to(root).as_posix()},
+    )
 
 
 def _vector_issue(doc: SearchDocument, message: str) -> LintIssue:
