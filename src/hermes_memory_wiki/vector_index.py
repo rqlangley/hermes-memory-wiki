@@ -85,6 +85,19 @@ class ReindexResult:
     diagnostics: list[str]
 
 
+class VectorSearchResults(list[WikiSearchResult]):
+    """List-compatible vector search results with preserved diagnostics."""
+
+    def __init__(
+        self,
+        results: Sequence[WikiSearchResult] = (),
+        *,
+        diagnostics: Sequence[str] = (),
+    ) -> None:
+        super().__init__(results)
+        self.diagnostics = list(diagnostics)
+
+
 def cosine_similarity(a: Sequence[float], b: Sequence[float]) -> float:
     """Return cosine similarity for two numeric vectors."""
     if len(a) != len(b):
@@ -118,19 +131,19 @@ def vector_search(
     if mode not in _VALID_VECTOR_SEARCH_MODES:
         raise ValueError(f"Unsupported vector search mode: {mode}")
     if max_results <= 0:
-        return []
+        return VectorSearchResults()
 
     diagnostics: list[str] = []
     if provider is None:
         provider, provider_diagnostics = _provider_from_config(config)
         diagnostics.extend(provider_diagnostics)
         if provider is None:
-            return []
+            return VectorSearchResults(diagnostics=diagnostics)
 
     index_path = _default_index_path(config)
     if not index_path.exists():
         diagnostics.append(f"Vector index not found: {index_path}")
-        return []
+        return VectorSearchResults(diagnostics=diagnostics)
 
     index = VectorIndex(index_path)
     stored_embeddings = _load_embeddings_for_search(index, provider)
@@ -139,7 +152,7 @@ def vector_search(
             "No vector embeddings available "
             f"(provider={provider.provider}, model={provider.model})."
         )
-        return []
+        return VectorSearchResults(diagnostics=diagnostics)
 
     query_embeddings = provider.embed_texts([query])
     if len(query_embeddings) != 1:
@@ -169,7 +182,7 @@ def vector_search(
     scored_results.sort(
         key=lambda result: (-result.score, result.path, result.matched_claim_id or "")
     )
-    return scored_results[:max_results]
+    return VectorSearchResults(scored_results[:max_results], diagnostics=diagnostics)
 
 
 def _load_embeddings_for_search(

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Sequence, cast
 
 import pytest
 
-from hermes_memory_wiki.config import MemoryWikiConfig
+from hermes_memory_wiki.config import EmbeddingConfig, MemoryWikiConfig
 from hermes_memory_wiki.vector_index import (
     SearchDocument,
     VectorIndex,
@@ -36,6 +36,10 @@ def _config(vault_path) -> MemoryWikiConfig:
 
 def _index(config: MemoryWikiConfig) -> VectorIndex:
     return VectorIndex(config.vault_path / METADATA_DIRECTORY / "vector" / "index.sqlite")
+
+
+def _diagnostics(results: object) -> list[str]:
+    return cast(list[str], getattr(results, "diagnostics"))
 
 
 def _doc(
@@ -131,15 +135,55 @@ def test_vector_search_returns_page_and_claim_results_with_snippets_and_metadata
     assert results[1].metadata["claim_id"] == "claim-route"
 
 
-def test_vector_search_handles_empty_or_missing_index_gracefully(tmp_path) -> None:
+def test_vector_search_missing_index_preserves_diagnostics_without_embedding_query(tmp_path) -> None:
     provider = MappingEmbeddingProvider({"anything": [1.0, 0.0, 0.0]})
 
-    missing_results = vector_search(_config(tmp_path / "missing"), "anything", provider=provider)
-    empty_results = vector_search(_config(tmp_path / "empty"), "anything", provider=provider)
+    results = vector_search(_config(tmp_path / "missing"), "anything", provider=provider)
 
-    assert missing_results == []
-    assert empty_results == []
+    assert results == []
+    assert isinstance(results, list)
+    assert any("Vector index not found" in diagnostic for diagnostic in _diagnostics(results))
     assert provider.calls == []
+
+
+def test_vector_search_empty_initialized_index_preserves_diagnostics_without_embedding_query(tmp_path) -> None:
+    config = _config(tmp_path)
+    provider = MappingEmbeddingProvider({"anything": [1.0, 0.0, 0.0]})
+    _index(config)
+
+    results = vector_search(config, "anything", provider=provider)
+
+    assert results == []
+    assert isinstance(results, list)
+    assert any("No vector embeddings available" in diagnostic for diagnostic in _diagnostics(results))
+    assert provider.calls == []
+
+
+def test_vector_search_provider_unavailable_preserves_diagnostics_without_network(tmp_path) -> None:
+    config = MemoryWikiConfig(
+        vault_path=tmp_path,
+        embeddings=EmbeddingConfig(enabled=False),
+    )
+
+    results = vector_search(config, "anything")
+
+    assert results == []
+    assert isinstance(results, list)
+    assert any("Embeddings are disabled" in diagnostic for diagnostic in _diagnostics(results))
+
+
+def test_vector_search_success_results_expose_empty_diagnostics(tmp_path) -> None:
+    config = _config(tmp_path)
+    provider = MappingEmbeddingProvider({"search query": [1.0, 0.0, 0.0]})
+    doc = _doc("page:one")
+    index = _index(config)
+    index.upsert_documents([doc])
+    index.store_embeddings(provider, [doc], [[1.0, 0.0, 0.0]])
+
+    results = vector_search(config, "search query", provider=provider)
+
+    assert len(results) == 1
+    assert _diagnostics(results) == []
 
 
 def test_vector_search_diagnoses_dimension_mismatch(tmp_path) -> None:
