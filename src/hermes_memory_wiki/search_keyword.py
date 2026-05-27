@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Sequence
 
 from hermes_memory_wiki.markdown import (
     HERMES_GENERATED_END,
@@ -26,6 +27,20 @@ _GENERATED_BLOCK_RE = re.compile(
     flags=re.DOTALL,
 )
 
+_CONTESTED_STATUSES = {"contested", "contradicted", "retracted", "deprecated", "inactive", "superseded"}
+
+
+@dataclass
+class WikiSearchResult:
+    corpus: str
+    path: str
+    title: str
+    kind: str
+    score: float
+    snippet: str
+    search_mode: str
+    matched_claim_id: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 def build_query_tokens(query: str) -> list[str]:
     """Return stable, unique keyword tokens for a free-text query."""
@@ -111,6 +126,177 @@ def build_snippet(raw: str, query: str) -> str:
         if line != "---":
             return line
     return ""
+
+
+def score_page(page: WikiPageSummary, query: str, mode: str = "auto") -> float:
+    """Score a page for keyword search using OpenClaw-like deterministic weights."""
+    score, _claim = _score_page_with_claim(page, query, mode)
+    return score
+
+
+def keyword_search(
+    pages: Sequence[WikiPageSummary], query: str, *, max_results: int = 10, mode: str = "auto"
+) -> list[WikiSearchResult]:
+    """Return keyword-ranked wiki pages with snippets and matched claim metadata."""
+    results: list[WikiSearchResult] = []
+    for page in pages:
+        score, matched_claim = _score_page_with_claim(page, query, mode)
+        if score <= 0:
+            continue
+
+        metadata: dict[str, Any] = {
+            "id": page.id,
+            "sourceIds": list(page.source_ids),
+            "claimCount": len(page.claims),
+        }
+        matched_claim_id = None
+        if matched_claim is not None:
+            matched_claim_id = matched_claim.id
+            metadata["matchedClaim"] = {
+                "id": matched_claim.id,
+                "status": matched_claim.status,
+                "confidence": matched_claim.confidence,
+                "text": matched_claim.text,
+            }
+            snippet = matched_claim.text
+        else:
+            snippet = build_snippet(page.body, query)
+
+        results.append(
+            WikiSearchResult(
+                corpus="wiki",
+                path=page.path,
+                title=page.title,
+                kind=page.kind,
+                score=score,
+                snippet=snippet,
+                search_mode=mode,
+                matched_claim_id=matched_claim_id,
+                metadata=metadata,
+            )
+        )
+
+    results.sort(key=lambda result: (-result.score, result.path))
+    return results[:max_results]
+
+
+def _score_page_with_claim(page: WikiPageSummary, query: str, mode: str) -> tuple[float, Any | None]:
+    del mode  # Task 4.2 accepts mode but intentionally does not add mode-specific boosts.
+    query_lower = query.lower().strip()
+    tokens = build_query_tokens(query)
+    if not query_lower and not tokens:
+        return 0.0, None
+
+    search_text = build_page_search_text(page).lower()
+    if not _matches_text(search_text, query_lower, tokens):
+        return 0.0, None
+
+    score = 1.0
+    score += _metadata_score(page, query_lower)
+    score += _body_occurrence_score(page.body, query_lower, tokens)
+    score += _token_boost_score(page, tokens)
+
+    scored_claims = [(_score_claim(claim, query_lower, tokens), claim) for claim in page.claims]
+    matching_claims = [(claim_score, claim) for claim_score, claim in scored_claims if claim_score > 0]
+    matched_claim = None
+    if matching_claims:
+        matching_claims.sort(key=lambda item: item[0], reverse=True)
+        best_claim_score, matched_claim = matching_claims[0]
+        score += best_claim_score
+        score += min(10.0, sum(claim_score for claim_score, _claim in matching_claims[1:]))
+
+    return float(score), matched_claim
+
+
+def _metadata_score(page: WikiPageSummary, query_lower: str) -> float:
+    score = 0.0
+    title = page.title.lower()
+    path = page.path.lower()
+    page_id = page.id.lower()
+    if query_lower and query_lower == title:
+        score += 50
+    elif query_lower and query_lower in title:
+        score += 20
+    if query_lower and query_lower in path:
+        score += 10
+    if query_lower and query_lower in page_id:
+        score += 20
+    if query_lower and any(query_lower in source_id.lower() for source_id in page.source_ids):
+        score += 12
+    return score
+
+
+def _score_claim(claim: Any, query_lower: str, tokens: list[str]) -> float:
+    claim_text = (claim.text or "").lower()
+    claim_id = (claim.id or "").lower()
+    matched = False
+    score = 0.0
+    if query_lower and query_lower in claim_text:
+        score += 25
+        matched = True
+    elif tokens and all(token in claim_text for token in tokens):
+        score += 18
+        matched = True
+    if query_lower and query_lower in claim_id:
+        score += 10
+        matched = True
+    if not matched:
+        return 0.0
+
+    confidence = _numeric_confidence(claim.confidence)
+    if confidence is not None:
+        score += round(confidence * 10)
+    status = (claim.status or "").lower()
+    score += -6 if status in _CONTESTED_STATUSES else 4
+    score += _freshness_score(claim)
+    return score
+
+
+def _numeric_confidence(value: Any) -> float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _freshness_score(claim: Any) -> int:
+    raw = claim.raw if isinstance(claim.raw, dict) else {}
+    freshness = str(raw.get("freshnessLevel") or raw.get("freshness") or "unknown").lower()
+    return {"fresh": 8, "aging": 4, "stale": -2}.get(freshness, -4)
+
+
+def _body_occurrence_score(body: str, query_lower: str, tokens: list[str]) -> float:
+    body_lower = _body_without_generated_blocks(body).lower()
+    count = body_lower.count(query_lower) if query_lower else 0
+    if count == 0 and tokens:
+        count = sum(body_lower.count(token) for token in tokens)
+    return float(min(10, count))
+
+
+def _token_boost_score(page: WikiPageSummary, tokens: list[str]) -> float:
+    score = 0.0
+    title = page.title.lower()
+    path_and_id = f"{page.path}\n{page.id}".lower()
+    metadata = "\n".join(
+        [*page.source_ids, *page.aliases, *page.questions, *page.contradictions, *page.best_used_for, *page.routes, *page.topics]
+    ).lower()
+    body = _body_without_generated_blocks(page.body).lower()
+    for token in tokens:
+        if token in title:
+            score += 8
+        if token in path_and_id:
+            score += 6
+        if token in metadata:
+            score += 4
+        if token in body:
+            score += 1
+    return score
+
+
+def _matches_text(text: str, query_lower: str, tokens: list[str]) -> bool:
+    return bool((query_lower and query_lower in text) or (tokens and all(token in text for token in tokens)))
 
 
 def _build_snippet_search_text(raw: str) -> str:
