@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 5.2
+**Last updated:** 2026-05-27 after Task 5.3
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists and has been pushed to origin through Task 5.2 after verification and review.
+The feature branch exists and has been pushed to origin through Task 5.3 after verification and review.
 
 Completed commits:
 
@@ -61,6 +61,8 @@ a42cc69 fix: harden embedding response validation
 845f673 docs: update handoff after embedding provider
 179827a docs: include handoff update commit
 affbad6 feat: build wiki vector search documents
+425d4aa feat: persist wiki vector index in sqlite
+ff52a71 fix: close vector index sqlite connections
 ```
 
 Completed tasks:
@@ -439,18 +441,59 @@ Non-blocking notes:
 
 - `tests/test_vector_index.py` hardcodes the exact fallback short hash for one deterministic ID assertion; accepted as a minor test brittleness note because it documents the current stable ID contract.
 
+### Task 5.3 — Implement SQLite vector index storage
+
+Files:
+
+- `src/hermes_memory_wiki/vector_index.py`
+- `tests/test_vector_index.py`
+
+Implemented:
+
+- `StoredEmbedding` dataclass for loaded vector index records.
+- `VectorIndex` SQLite storage wrapper with parent directory creation and schema initialization.
+- SQLite `documents` and `embeddings` tables using the approved v1 schema.
+- SQLite indexes `idx_documents_page_path` and `idx_embeddings_provider_model`.
+- `upsert_documents(...)` for deterministic document persistence and stale document deletion.
+- `stale_documents_for_embedding(...)` to select documents missing current provider/model/dimension/hash embeddings.
+- `store_embeddings(...)` with JSON vector storage, embedded timestamp handling, length mismatch validation, and declared dimension validation.
+- `load_embeddings(...)` for deterministic provider/model/dimension-filtered embedding retrieval.
+- Explicit SQLite connection closing via an internal context manager and regression coverage for connection/file descriptor leaks.
+
+Covered behavior:
+
+- creates SQLite schema;
+- upserts documents;
+- stores embeddings as JSON;
+- rejects embedding count mismatches;
+- rejects declared dimension mismatches before writing rows;
+- skips unchanged embeddings by hash/provider/model;
+- marks changed hash/model/dimensions as stale;
+- deletes stale documents no longer present and cascades stale embeddings;
+- loads all embeddings for a provider/model in deterministic order;
+- closes SQLite connections after repeated operations.
+
+Review results:
+
+- Spec compliance: PASS
+- Code quality: APPROVED after scoped connection-close and dimension-validation fixes
+
+Non-blocking notes:
+
+- The approved schema keys embeddings by `document_id`, so storing a different provider/model for the same document overwrites the previous embedding. This matches Task 5.3/design v1 but remains a future limitation if concurrent multiple embedding models are required.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 5.2:
+Latest verification after Task 5.3:
 
 ```bash
 .venv/bin/python -m pytest tests/test_vector_index.py -q
-# 5 passed
+# 15 passed
 
 .venv/bin/python -m pytest -q
-# 81 passed
+# 91 passed
 
 .venv/bin/python -m compileall src tests
 # passed
@@ -509,33 +552,33 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 5.3 — Implement SQLite vector index storage** from the implementation plan.
+Continue with **Task 5.4 — Implement reindex workflow** from the implementation plan.
 
 Files:
 
 - modify `src/hermes_memory_wiki/vector_index.py`
-- modify `tests/test_vector_index.py`
+- create/modify `tests/test_reindex.py`
 
 Required TDD test cases:
 
-- creates SQLite schema;
-- upserts documents;
-- stores embeddings;
-- skips unchanged embeddings by hash/provider/model;
-- deletes stale documents no longer present;
-- loads all embeddings for a provider/model.
+- reindex embeds all docs on first run;
+- second run skips unchanged docs;
+- force reindex re-embeds;
+- changed page text re-embeds only changed docs;
+- missing API key returns diagnostic without corrupting index.
 
 Implementation notes:
 
-- expose `VectorIndex` as specified in the implementation plan;
-- store vectors as JSON for v1;
-- preserve deterministic document metadata from Task 5.2;
+- expose `ReindexResult` and `reindex_vault(...)` as specified in the implementation plan;
+- build documents from queryable pages and use `VectorIndex` from Task 5.3;
+- use `FakeEmbeddingProvider` in tests; no network access in default tests;
+- missing OpenAI API key should return/report a clear diagnostic without corrupting stored documents/embeddings;
 - no OpenClaw runtime imports or dependencies.
 
 Expected commit message:
 
 ```text
-feat: persist wiki vector index in sqlite
+feat: reindex wiki embeddings incrementally
 ```
 
 ## Required workflow
