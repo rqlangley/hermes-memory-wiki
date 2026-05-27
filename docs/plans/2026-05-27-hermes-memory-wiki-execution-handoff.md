@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 7.1
+**Last updated:** 2026-05-27 after Task 7.2
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists and has been pushed to origin through Task 7.1 after verification, review, and handoff update.
+The feature branch exists and has been pushed to origin through Task 7.2 after verification, review, and handoff update.
 
 Completed commits:
 
@@ -75,6 +75,10 @@ c40d332 feat: add hybrid wiki search
 579f2d6 fix: make hybrid search tests environment-independent
 9bee2de docs: update handoff after hybrid search
 e6812ef feat: resolve and read wiki pages
+c41ca28 docs: update handoff after wiki get
+aff7ffe feat: create wiki synthesis mutations
+86b9186 fix: accept create synthesis op mutations
+e33cd7a fix: validate synthesis mutation fields
 ```
 
 Completed tasks:
@@ -644,21 +648,56 @@ Non-blocking notes:
 
 - Additional future edge-case tests could cover clamped line ranges, traversal-looking lookups, and symlink exclusion specifically through `get_page(...)`; existing lower-level vault/path tests cover the safety primitives.
 
+### Task 7.2 — Implement `create_synthesis` mutation
+
+Files:
+
+- `src/hermes_memory_wiki/apply.py`
+- `tests/test_apply.py`
+
+Implemented:
+
+- `WikiMutation` and `ApplyResult` dataclasses.
+- `normalize_mutation(...)` for `op: create_synthesis` mutations with required `title`, `body`, and non-empty `sourceIds`.
+- `apply_mutation(...)` for creating/updating synthesis pages only; `update_metadata` remains deferred to Task 7.3.
+- Deterministic synthesis slug/path generation under `syntheses/<slug>.md` and default id `synthesis.<slug>`.
+- Frontmatter writing for id/title/pageType/sourceIds/claims/status/updatedAt plus optional questions, contradictions, and confidence.
+- Generated summary block creation/replacement using Hermes managed markers.
+- Human notes block creation and preservation on update.
+- Safe writes under the configured vault root and queryable immediate `.md` synthesis path validation.
+
+Covered behavior:
+
+- title/body/sourceIds required;
+- spec-compliant `op` discriminator accepted and unsupported ops rejected;
+- deterministic synthesis path and default id;
+- required and optional frontmatter fields written;
+- generated summary block written;
+- human notes block exists and is preserved on update;
+- explicit invalid paths and invalid confidence values rejected.
+
+Review results:
+
+- Initial spec compliance: FAIL; fixed `op` vs `type` discriminator and optional field support.
+- Spec compliance after fixes: PASS.
+- Initial code quality: REQUEST_CHANGES; fixed contradiction text-list normalization, confidence validation, and explicit path queryability validation.
+- Code quality after fixes: APPROVED.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 7.1:
+Latest verification after Task 7.2:
 
 ```bash
-.venv/bin/python -m pytest tests/test_get.py -q
-# 8 passed
-
-.venv/bin/python -m pytest tests/test_vault_read.py tests/test_get.py tests/test_paths.py -q
+.venv/bin/python -m pytest tests/test_apply.py -q
 # 22 passed
 
+.venv/bin/python -m pytest tests/test_markdown.py tests/test_apply.py tests/test_vault_read.py -q
+# 40 passed
+
 .venv/bin/python -m pytest -q
-# 122 passed
+# 144 passed
 
 .venv/bin/python -m compileall src tests
 # passed
@@ -717,34 +756,35 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 7.2 — Implement `create_synthesis` mutation** from the implementation plan.
+Continue with **Task 7.3 — Implement `update_metadata` mutation** from the implementation plan.
 
 Files:
 
-- create `src/hermes_memory_wiki/apply.py`
-- create `tests/test_apply.py`
+- modify `src/hermes_memory_wiki/apply.py`
+- modify `tests/test_apply.py`
 
 Required TDD test cases:
 
-- title/body/sourceIds required;
-- slug path is deterministic under `syntheses/`;
-- page id defaults to `synthesis.<slug>`;
-- frontmatter contains claims/sourceIds/status/updatedAt;
-- generated summary block is written;
-- human notes block exists and is preserved on update.
+- lookup required;
+- missing page raises clear error;
+- sourceIds update replaces normalized source IDs;
+- empty claims remove claims field;
+- confidence null removes confidence;
+- body is preserved;
+- updatedAt changes.
 
 Implementation notes:
 
-- expose `normalize_mutation(...)` and `apply_mutation(...)` as specified in the implementation plan;
-- implement only `create_synthesis` for Task 7.2; defer `update_metadata` to Task 7.3;
-- use existing markdown render/managed-block helpers and path safety helpers;
-- preserve human notes blocks on update and keep writes under the configured vault root;
+- extend `normalize_mutation(...)`/`apply_mutation(...)` for `op: update_metadata` only;
+- use `get_page(...)`/existing lookup helpers where appropriate;
+- update frontmatter deterministically while preserving page body and human/generated blocks;
+- keep writes under configured vault root;
 - do not implement Hermes `wiki_apply` tool registration yet (Task 8.1).
 
 Expected commit message:
 
 ```text
-feat: create wiki synthesis mutations
+feat: update wiki page metadata
 ```
 
 ## Required workflow
