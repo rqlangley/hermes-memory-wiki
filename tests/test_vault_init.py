@@ -1,6 +1,8 @@
 import json
 from datetime import datetime, timezone
 
+import pytest
+
 from hermes_memory_wiki.config import MemoryWikiConfig
 from hermes_memory_wiki.vault import initialize_vault
 
@@ -107,3 +109,31 @@ def test_metadata_directory_is_hermes_wiki(tmp_path):
 
     assert (root / ".hermes-wiki").is_dir()
     assert not (root / ".openclaw-wiki").exists()
+
+
+def test_rejects_metadata_directory_symlink_without_writing_outside_vault(tmp_path):
+    root = tmp_path / "vault"
+    external = tmp_path / "external-metadata"
+    root.mkdir()
+    external.mkdir()
+    (root / ".hermes-wiki").symlink_to(external, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="symlink"):
+        initialize_vault(_config(root), now=_init_time())
+
+    assert not (external / "state.json").exists()
+    assert not (external / "log.jsonl").exists()
+
+
+def test_rejects_starter_file_symlink_without_writing_outside_vault(tmp_path):
+    root = tmp_path / "vault"
+    external = tmp_path / "external-files"
+    external_target = external / "AGENTS.md"
+    root.mkdir()
+    external.mkdir()
+    (root / "AGENTS.md").symlink_to(external_target)
+
+    with pytest.raises(ValueError, match="symlink"):
+        initialize_vault(_config(root), now=_init_time())
+
+    assert not external_target.exists()

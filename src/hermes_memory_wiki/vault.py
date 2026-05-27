@@ -48,6 +48,7 @@ def initialize_vault(
     created_directories: list[Path] = []
     created_files: list[Path] = []
 
+    _reject_symlink(root, "Vault path")
     if not root.exists():
         root.mkdir(parents=True)
         created_directories.append(root)
@@ -56,6 +57,7 @@ def initialize_vault(
 
     for relative_directory in _REQUIRED_DIRECTORIES:
         directory = root / relative_directory
+        _reject_symlink(directory, "Vault directory path")
         if not directory.exists():
             directory.mkdir(parents=True)
             created_directories.append(directory)
@@ -66,24 +68,28 @@ def initialize_vault(
 
     for relative_file, content in _STARTER_FILES.items():
         path = root / relative_file
+        _reject_symlink(path, "Vault file path")
         if not path.exists():
-            path.write_text(content)
+            path.write_text(content, encoding="utf-8")
             created_files.append(path)
         elif not path.is_file():
             raise IsADirectoryError(f"Vault file path exists and is not a file: {path}")
 
     state_path = root / METADATA_DIRECTORY / "state.json"
+    _reject_symlink(state_path, "Vault file path")
     if not state_path.exists():
         state_path.write_text(
-            json.dumps({"version": 1, "createdAt": timestamp}, indent=2) + "\n"
+            json.dumps({"version": 1, "createdAt": timestamp}, indent=2) + "\n",
+            encoding="utf-8",
         )
         created_files.append(state_path)
     elif not state_path.is_file():
         raise IsADirectoryError(f"Vault file path exists and is not a file: {state_path}")
 
     log_path = root / METADATA_DIRECTORY / "log.jsonl"
+    _reject_symlink(log_path, "Vault file path")
     if not log_path.exists():
-        log_path.write_text("")
+        log_path.write_text("", encoding="utf-8")
         created_files.append(log_path)
     elif not log_path.is_file():
         raise IsADirectoryError(f"Vault file path exists and is not a file: {log_path}")
@@ -104,6 +110,11 @@ def initialize_vault(
         created_directories=created_directories,
         created_files=created_files,
     )
+
+
+def _reject_symlink(path: Path, label: str) -> None:
+    if path.is_symlink():
+        raise ValueError(f"{label} must not be a symlink: {path}")
 
 
 def _timestamp(now: datetime | None) -> str:
@@ -128,7 +139,7 @@ def _append_init_log(
         ],
         "createdFiles": [_display_path(root, path) for path in created_files],
     }
-    with log_path.open("a") as handle:
+    with log_path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(entry, sort_keys=True) + "\n")
 
 
