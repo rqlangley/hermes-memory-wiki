@@ -96,6 +96,48 @@ def test_openai_provider_rejects_embedding_count_mismatch(monkeypatch):
     assert "openai embeddings" in message
 
 
+@pytest.mark.parametrize(
+    ("data", "expected_message"),
+    [
+        (
+            [
+                {"index": 0, "embedding": [1.0]},
+                {"index": 0, "embedding": [2.0]},
+            ],
+            "duplicate",
+        ),
+        (
+            [
+                {"index": 0, "embedding": [1.0]},
+                {"index": 2, "embedding": [2.0]},
+            ],
+            "expected range 0..1",
+        ),
+    ],
+)
+def test_openai_provider_rejects_duplicate_or_out_of_range_embedding_indexes(
+    monkeypatch, data, expected_message
+):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    def transport(url, headers, body, timeout):
+        del url, headers, body, timeout
+        return {"data": data}
+
+    provider = OpenAIEmbeddingProvider(
+        model="text-embedding-3-small",
+        batch_size=2,
+        transport=transport,
+    )
+
+    with pytest.raises(RuntimeError) as excinfo:
+        provider.embed_texts(["one", "two"])
+
+    message = str(excinfo.value).lower()
+    assert "index" in message
+    assert expected_message in message
+
+
 def test_urllib_transport_wraps_malformed_json_response(monkeypatch):
     class FakeResponse:
         def __enter__(self):

@@ -134,6 +134,27 @@ def _embeddings_from_response(
             f"expected {expected_count}, received {len(data)}"
         )
 
+    response_indexes = [
+        item.get("index") for item in data if isinstance(item, Mapping) and "index" in item
+    ]
+    if response_indexes:
+        if expected_count is not None and len(response_indexes) != expected_count:
+            raise RuntimeError(
+                "OpenAI embeddings response indexes must be present for every item "
+                "or absent for every item"
+            )
+        if not all(isinstance(index, int) for index in response_indexes):
+            raise RuntimeError("OpenAI embeddings response index values must be integers")
+        if len(set(response_indexes)) != len(response_indexes):
+            raise RuntimeError("OpenAI embeddings response contained duplicate index values")
+        if expected_count is not None:
+            expected_indexes = set(range(expected_count))
+            if set(response_indexes) != expected_indexes:
+                raise RuntimeError(
+                    "OpenAI embeddings response index values did not match "
+                    f"expected range 0..{expected_count - 1}"
+                )
+
     ordered_items = sorted(
         enumerate(data),
         key=lambda item: item[1].get("index", item[0])
