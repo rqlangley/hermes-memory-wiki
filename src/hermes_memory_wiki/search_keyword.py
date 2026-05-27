@@ -48,6 +48,7 @@ def build_page_search_text(page: WikiPageSummary) -> str:
     _append_text(values, page.path)
     _append_text(values, page.id)
     _append_text(values, page.kind)
+    _append_text(values, _body_without_generated_blocks(page.body))
     _append_many(values, page.aliases)
     _append_many(values, page.source_ids)
     _append_many(values, page.questions)
@@ -114,6 +115,10 @@ def build_snippet(raw: str, query: str) -> str:
 
 def _build_snippet_search_text(raw: str) -> str:
     body = parse_wiki_markdown(raw).body
+    return _body_without_generated_blocks(body)
+
+
+def _body_without_generated_blocks(body: str) -> str:
     return _GENERATED_BLOCK_RE.sub("", body)
 
 
@@ -132,8 +137,12 @@ def _append_any(values: list[str], value: Any) -> None:
             _append_text(values, key)
             _append_any(values, item)
         return
-    if isinstance(value, (list, tuple, set)):
+    if isinstance(value, (list, tuple)):
         for item in value:
+            _append_any(values, item)
+        return
+    if isinstance(value, set):
+        for item in sorted(value, key=lambda item: str(item)):
             _append_any(values, item)
         return
     _append_text(values, value)

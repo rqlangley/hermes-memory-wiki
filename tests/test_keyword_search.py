@@ -5,6 +5,21 @@ from hermes_memory_wiki.schema import WikiClaim, WikiEvidence, WikiPageSummary
 from hermes_memory_wiki.search_keyword import build_page_search_text, build_query_tokens, build_snippet
 
 
+class _SetToken:
+    def __init__(self, text: str, hash_value: int) -> None:
+        self.text = text
+        self.hash_value = hash_value
+
+    def __str__(self) -> str:
+        return self.text
+
+    def __hash__(self) -> int:
+        return self.hash_value
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, _SetToken) and self.text == other.text
+
+
 def test_generated_related_blocks_removed_from_snippet_text() -> None:
     raw = (
         "Human-authored overview line.\n\n"
@@ -103,3 +118,39 @@ def test_page_search_text_includes_summary_fields_claims_and_evidence() -> None:
         "Evidence text",
     ]:
         assert expected in search_text
+
+
+def test_page_search_text_includes_body_without_generated_blocks() -> None:
+    page = WikiPageSummary(
+        path="topics/search.md",
+        kind="topic",
+        id="topic:search",
+        title="Search",
+        body=(
+            "Human-authored body text should be searchable.\n\n"
+            f"{HERMES_GENERATED_START}\n"
+            "Generated related text should be omitted.\n"
+            f"{HERMES_GENERATED_END}\n\n"
+            "Another human-authored body line.\n"
+        ),
+    )
+
+    search_text = build_page_search_text(page)
+
+    assert "Human-authored body text should be searchable." in search_text
+    assert "Another human-authored body line." in search_text
+    assert "Generated related text should be omitted." not in search_text
+
+
+def test_page_search_text_sorts_set_values_by_string_representation() -> None:
+    page = WikiPageSummary(
+        path="topics/routing.md",
+        kind="topic",
+        id="topic:routing",
+        title="Routing",
+        routing={"tokens": {_SetToken("beta-token", 0), _SetToken("alpha-token", 1)}},
+    )
+
+    search_text = build_page_search_text(page)
+
+    assert search_text.index("alpha-token") < search_text.index("beta-token")
