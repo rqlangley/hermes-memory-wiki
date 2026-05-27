@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from hermes_memory_wiki.compile import compile_vault
 from hermes_memory_wiki.config import MemoryWikiConfig
 from hermes_memory_wiki.vault import initialize_vault
@@ -29,6 +31,20 @@ id: {page_id}
 title: {title}
 pageType: {page_type}
 {claim_lines}---
+# {title}
+
+Body for {title}.
+"""
+
+
+def _page_with_anonymous_claim(*, page_id, title, page_type, claim_text):
+    return f"""---
+id: {page_id}
+title: {title}
+pageType: {page_type}
+claims:
+  - text: {claim_text}
+---
 # {title}
 
 Body for {title}.
@@ -137,8 +153,26 @@ def test_claims_jsonl_contains_one_claim_per_line(tmp_path):
 
     claims = _jsonl(root / ".hermes-wiki" / "cache" / "claims.jsonl")
     assert claims == [
-        {"pagePath": "concepts/engine.md", "pageId": "concept:engine", "pageTitle": "Analytical Engine", "claimId": "claim:engine-1", "text": "The engine was programmable.", "status": None, "confidence": None},
-        {"pagePath": "entities/ada.md", "pageId": "person:ada", "pageTitle": "Ada Lovelace", "claimId": "claim:ada-1", "text": "Ada wrote notes.", "status": None, "confidence": None},
+        {
+            "pagePath": "concepts/engine.md",
+            "pageId": "concept:engine",
+            "pageTitle": "Analytical Engine",
+            "claimId": "claim:engine-1",
+            "claimDocumentId": "claim:concepts/engine.md:claim:engine-1",
+            "text": "The engine was programmable.",
+            "status": None,
+            "confidence": None,
+        },
+        {
+            "pagePath": "entities/ada.md",
+            "pageId": "person:ada",
+            "pageTitle": "Ada Lovelace",
+            "claimId": "claim:ada-1",
+            "claimDocumentId": "claim:entities/ada.md:claim:ada-1",
+            "text": "Ada wrote notes.",
+            "status": None,
+            "confidence": None,
+        },
     ]
 
 
@@ -191,3 +225,72 @@ def test_compile_appends_log_when_files_update(tmp_path):
     assert "reports/index.md" in entries[-1]["updatedFiles"]
     assert ".hermes-wiki/cache/agent-digest.json" in entries[-1]["updatedFiles"]
     assert root / "reports" / "index.md" in result.updated_files
+
+
+def test_compile_rejects_root_index_symlink_without_overwriting_target(tmp_path):
+    root = tmp_path / "vault"
+    _seed_vault(root)
+    target = tmp_path / "outside-index.md"
+    target.write_text("outside content", encoding="utf-8")
+    (root / "index.md").unlink()
+    (root / "index.md").symlink_to(target)
+
+    with pytest.raises(ValueError, match="symlink"):
+        compile_vault(_config(root))
+
+    assert target.read_text(encoding="utf-8") == "outside content"
+
+
+def test_compile_rejects_cache_directory_symlink_without_overwriting_target(tmp_path):
+    root = tmp_path / "vault"
+    _seed_vault(root)
+    outside_cache = tmp_path / "outside-cache"
+    outside_cache.mkdir()
+    (root / ".hermes-wiki" / "cache").rmdir()
+    (root / ".hermes-wiki" / "cache").symlink_to(outside_cache, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="symlink"):
+        compile_vault(_config(root))
+
+    assert list(outside_cache.iterdir()) == []
+
+
+def test_compile_rejects_log_symlink_without_overwriting_target(tmp_path):
+    root = tmp_path / "vault"
+    _seed_vault(root)
+    target = tmp_path / "outside-log.jsonl"
+    target.write_text("outside log\n", encoding="utf-8")
+    log_path = root / ".hermes-wiki" / "log.jsonl"
+    log_path.unlink()
+    log_path.symlink_to(target)
+
+    with pytest.raises(ValueError, match="symlink"):
+        compile_vault(_config(root))
+
+    assert target.read_text(encoding="utf-8") == "outside log\n"
+
+
+def test_anonymous_claims_correlate_with_search_documents(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(
+        root,
+        "entities/anonymous.md",
+        _page_with_anonymous_claim(
+            page_id="person:anonymous",
+            title="Anonymous Person",
+            page_type="person",
+            claim_text="This claim has no explicit ID.",
+        ),
+    )
+
+    compile_vault(_config(root))
+
+    claims = _jsonl(root / ".hermes-wiki" / "cache" / "claims.jsonl")
+    docs = _jsonl(root / ".hermes-wiki" / "cache" / "search-docs.jsonl")
+    claim_doc = next(doc for doc in docs if doc["docType"] == "claim")
+    assert len(claims) == 1
+    assert claims[0]["claimId"] != "claim-0"
+    assert claims[0]["claimDocumentId"] == claim_doc["id"]
+    assert claims[0]["claimId"] in claim_doc["text"]
+    assert claim_doc["metadata"]["claim_ordinal"] == 0

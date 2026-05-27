@@ -9,7 +9,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Sequence
 
 from hermes_memory_wiki.config import MemoryWikiConfig
-from hermes_memory_wiki.schema import WikiClaim, WikiPageSummary
+from hermes_memory_wiki.schema import WikiPageSummary
 from hermes_memory_wiki.vault import METADATA_DIRECTORY, QUERY_DIRS, read_queryable_pages
 from hermes_memory_wiki.vector_index import SearchDocument, build_search_documents
 
@@ -29,7 +29,10 @@ def compile_vault(config: MemoryWikiConfig) -> CompileResult:
     page_counts = _page_counts(pages)
     claim_count = sum(len(page.claims) for page in pages)
     cache_dir = root / METADATA_DIRECTORY / "cache"
+    _reject_symlink(root / METADATA_DIRECTORY, "Generated metadata directory")
+    _reject_symlink(cache_dir, "Generated cache directory")
     cache_dir.mkdir(parents=True, exist_ok=True)
+    search_documents = build_search_documents(pages)
 
     outputs: dict[Path, str] = {}
     outputs[root / "index.md"] = _render_root_index(page_counts, claim_count)
@@ -42,8 +45,8 @@ def compile_vault(config: MemoryWikiConfig) -> CompileResult:
         outputs[directory / "index.md"] = _render_directory_index(query_dir, directory_pages)
 
     outputs[cache_dir / "agent-digest.json"] = _json_text(_agent_digest(pages, page_counts, claim_count))
-    outputs[cache_dir / "claims.jsonl"] = _jsonl_text(_claim_records(pages))
-    outputs[cache_dir / "search-docs.jsonl"] = _jsonl_text(_search_document_records(build_search_documents(pages)))
+    outputs[cache_dir / "claims.jsonl"] = _jsonl_text(_claim_records(pages, search_documents))
+    outputs[cache_dir / "search-docs.jsonl"] = _jsonl_text(_search_document_records(search_documents))
 
     updated_files = _write_changed(outputs)
     if updated_files:
@@ -128,14 +131,17 @@ def _agent_digest(
     }
 
 
-def _claim_records(pages: Sequence[WikiPageSummary]) -> Iterable[dict[str, Any]]:
+def _claim_records(pages: Sequence[WikiPageSummary], search_documents: Sequence[SearchDocument]) -> Iterable[dict[str, Any]]:
+    claim_documents = _claim_document_map(search_documents)
     for page in pages:
         for ordinal, claim in enumerate(page.claims):
+            claim_document = claim_documents.get((page.path, ordinal))
             yield {
                 "pagePath": page.path,
                 "pageId": page.id,
                 "pageTitle": page.title,
-                "claimId": claim.id or _fallback_claim_id(ordinal),
+                "claimId": claim.id or _fallback_claim_id_from_document(claim_document, ordinal),
+                "claimDocumentId": claim_document.id if claim_document else None,
                 "text": claim.text,
                 "status": claim.status,
                 "confidence": claim.confidence,
@@ -169,6 +175,8 @@ def _write_changed(outputs: dict[Path, str]) -> list[Path]:
     updated: list[Path] = []
     for path in sorted(outputs):
         content = outputs[path]
+        _reject_symlink(path.parent, "Generated output directory")
+        _reject_symlink(path, "Generated output path")
         if path.exists() and path.read_text(encoding="utf-8") == content:
             continue
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -179,6 +187,8 @@ def _write_changed(outputs: dict[Path, str]) -> list[Path]:
 
 def _append_compile_log(root: Path, updated_files: Sequence[Path]) -> None:
     log_path = root / METADATA_DIRECTORY / "log.jsonl"
+    _reject_symlink(log_path.parent, "Generated log directory")
+    _reject_symlink(log_path, "Generated log path")
     log_path.parent.mkdir(parents=True, exist_ok=True)
     entry = {
         "event": "compile",
@@ -202,5 +212,26 @@ def _display_path(root: Path, path: Path) -> str:
     return "." if path == root else path.relative_to(root).as_posix()
 
 
-def _fallback_claim_id(ordinal: int) -> str:
+def _claim_document_map(search_documents: Sequence[SearchDocument]) -> dict[tuple[str, int], SearchDocument]:
+    claim_documents: dict[tuple[str, int], SearchDocument] = {}
+    for document in search_documents:
+        if document.doc_type != "claim":
+            continue
+        ordinal = document.metadata.get("claim_ordinal")
+        if isinstance(ordinal, int):
+            claim_documents[(document.page_path, ordinal)] = document
+    return claim_documents
+
+
+def _fallback_claim_id_from_document(claim_document: SearchDocument | None, ordinal: int) -> str:
+    if claim_document is not None:
+        prefix = f"claim:{claim_document.page_path}:"
+        if claim_document.id.startswith(prefix):
+            claim_part = claim_document.id.removeprefix(prefix).replace(":", "-", 1)
+            return f"claim-{claim_part}"
     return f"claim-{ordinal}"
+
+
+def _reject_symlink(path: Path, label: str) -> None:
+    if path.is_symlink():
+        raise ValueError(f"{label} must not be a symlink: {path}")
