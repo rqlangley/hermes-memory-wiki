@@ -62,6 +62,177 @@ def _issues_by_code(result, code):
     return [issue for issue in result.issues if issue.code == code]
 
 
+def test_missing_id_creates_structure_error_without_silent_defaulting(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(
+        root,
+        "concepts/no-id.md",
+        """---
+title: No ID
+pageType: concept
+updatedAt: 2026-05-01T00:00:00+00:00
+---
+# No ID
+""",
+    )
+
+    result = lint_vault(_config(root))
+
+    issues = _issues_by_code(result, "missing-id")
+    assert len(issues) == 1
+    assert issues[0].severity == "error"
+    assert issues[0].category == "structure"
+    assert issues[0].path == "concepts/no-id.md"
+
+
+def test_missing_page_type_creates_structure_error(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(
+        root,
+        "concepts/no-page-type.md",
+        """---
+id: concept:no-page-type
+title: No Page Type
+updatedAt: 2026-05-01T00:00:00+00:00
+---
+# No Page Type
+""",
+    )
+
+    result = lint_vault(_config(root))
+
+    issues = _issues_by_code(result, "missing-page-type")
+    assert len(issues) == 1
+    assert issues[0].severity == "error"
+    assert issues[0].category == "structure"
+    assert issues[0].path == "concepts/no-page-type.md"
+    assert issues[0].details == {"expected": "concept"}
+
+
+def test_missing_title_creates_structure_error_without_using_heading_or_path(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(
+        root,
+        "concepts/no-title.md",
+        """---
+id: concept:no-title
+pageType: concept
+updatedAt: 2026-05-01T00:00:00+00:00
+---
+# Heading Is Not Frontmatter Title
+""",
+    )
+
+    result = lint_vault(_config(root))
+
+    issues = _issues_by_code(result, "missing-title")
+    assert len(issues) == 1
+    assert issues[0].severity == "error"
+    assert issues[0].category == "structure"
+    assert issues[0].path == "concepts/no-title.md"
+
+
+def test_non_source_non_report_pages_missing_source_ids_create_provenance_warning(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(root, "entities/ada.md", _page(page_id="entity:ada", title="Ada", page_type="entity"))
+    _write(root, "concepts/engine.md", _page(page_id="concept:engine", title="Engine", page_type="concept"))
+    _write(root, "syntheses/synthesis.md", _page(page_id="synthesis:one", title="Synthesis", page_type="synthesis"))
+    _write(root, "sources/source.md", _page(page_id="source:one", title="Source", page_type="source"))
+    _write(root, "reports/report.md", _page(page_id="report:one", title="Report", page_type="report"))
+
+    result = lint_vault(_config(root))
+
+    issues = _issues_by_code(result, "missing-source-ids")
+    assert sorted(str(issue.path) for issue in issues) == [
+        "concepts/engine.md",
+        "entities/ada.md",
+        "syntheses/synthesis.md",
+    ]
+    assert {issue.severity for issue in issues} == {"warning"}
+    assert {issue.category for issue in issues} == {"provenance"}
+
+
+def test_stale_claim_updated_at_creates_quality_issue(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(
+        root,
+        "concepts/stale-claim.md",
+        _page(
+            source_ids=("source:one",),
+            claims="  - id: claim:old\n    text: Old claim.\n    updatedAt: 2000-01-01T00:00:00+00:00\n    evidence:\n      - sourceId: source:one\n",
+        ),
+    )
+    _write(root, "sources/source.md", _page(page_id="source:one", title="Source", page_type="source"))
+
+    result = lint_vault(_config(root))
+
+    issues = _issues_by_code(result, "stale-claim")
+    assert len(issues) == 1
+    assert issues[0].severity == "issue"
+    assert issues[0].category == "quality"
+    assert issues[0].path == "concepts/stale-claim.md"
+    assert issues[0].claim_id == "claim:old"
+
+
+def test_broken_wikilink_creates_links_issue(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(
+        root,
+        "concepts/links.md",
+        _page(source_ids=("source:one",)) + "\nSee [[concepts/missing.md]] and [[Missing Page]].\n",
+    )
+    _write(root, "sources/source.md", _page(page_id="source:one", title="Source", page_type="source"))
+
+    result = lint_vault(_config(root))
+
+    issues = _issues_by_code(result, "broken-wikilink")
+    assert [(issue.category, issue.details["target"]) for issue in issues] == [
+        ("links", "Missing Page"),
+        ("links", "concepts/missing.md"),
+    ]
+
+
+def test_source_provenance_fields_required_for_openclaw_source_types(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(
+        root,
+        "sources/bridge.md",
+        _page(page_id="source:bridge", title="Bridge", page_type="source")
+        .replace("updatedAt:", "sourceType: memory-bridge\nupdatedAt:"),
+    )
+    _write(
+        root,
+        "sources/events.md",
+        _page(page_id="source:events", title="Events", page_type="source")
+        .replace("updatedAt:", "sourceType: memory-bridge-events\nbridgeRelativePath: memories/events.jsonl\nupdatedAt:"),
+    )
+    _write(
+        root,
+        "sources/unsafe.md",
+        _page(page_id="source:unsafe", title="Unsafe", page_type="source")
+        .replace("updatedAt:", "sourceType: unsafe-local\nunsafeLocalConfiguredPath: /tmp/memory\nupdatedAt:"),
+    )
+
+    result = lint_vault(_config(root))
+
+    issues = _issues_by_code(result, "missing-source-provenance")
+    assert [(issue.path, issue.details["field"]) for issue in issues] == [
+        ("sources/bridge.md", "bridgeRelativePath"),
+        ("sources/bridge.md", "bridgeWorkspaceDir"),
+        ("sources/events.md", "bridgeWorkspaceDir"),
+        ("sources/unsafe.md", "unsafeLocalRelativePath"),
+    ]
+    assert {issue.severity for issue in issues} == {"warning"}
+    assert {issue.category for issue in issues} == {"provenance"}
+
+
 def test_missing_claim_evidence_creates_provenance_warning(tmp_path):
     root = tmp_path / "vault"
     initialize_vault(_config(root))
@@ -73,7 +244,7 @@ def test_missing_claim_evidence_creates_provenance_warning(tmp_path):
 
     result = lint_vault(_config(root))
 
-    issues = _issues_by_code(result, "missing-claim-evidence")
+    issues = _issues_by_code(result, "claim-missing-evidence")
     assert len(issues) == 1
     assert issues[0].severity == "warning"
     assert issues[0].category == "provenance"
@@ -91,7 +262,7 @@ def test_contradictions_create_contradiction_issue(tmp_path):
     issues = _issues_by_code(result, "contradiction")
     assert len(issues) == 1
     assert issues[0].severity == "issue"
-    assert issues[0].category == "contradiction"
+    assert issues[0].category == "contradictions"
     assert "A conflicts with B." in issues[0].message
 
 
@@ -104,7 +275,7 @@ def test_questions_create_open_question_issue(tmp_path):
 
     issues = _issues_by_code(result, "open-question")
     assert len(issues) == 1
-    assert issues[0].category == "open-question"
+    assert issues[0].category == "open-questions"
     assert "What remains unknown?" in issues[0].message
 
 
@@ -139,7 +310,7 @@ def test_stale_updated_at_creates_stale_issue(tmp_path):
 
     issues = _issues_by_code(result, "stale-updated-at")
     assert len(issues) == 1
-    assert issues[0].category == "stale"
+    assert issues[0].category == "quality"
     assert issues[0].path == "concepts/stale.md"
 
 
@@ -154,7 +325,7 @@ def test_duplicate_ids_create_schema_error(tmp_path):
     issues = _issues_by_code(result, "duplicate-id")
     assert len(issues) == 1
     assert issues[0].severity == "error"
-    assert issues[0].category == "schema"
+    assert issues[0].category == "structure"
     assert issues[0].details["id"] == "concept:duplicate"
     assert issues[0].details["paths"] == ["concepts/one.md", "concepts/two.md"]
 
@@ -180,7 +351,7 @@ updatedAt: 2026-05-01T00:00:00+00:00
     issues = _issues_by_code(result, "invalid-markdown")
     assert len(issues) == 1
     assert issues[0].severity == "error"
-    assert issues[0].category == "schema"
+    assert issues[0].category == "structure"
     assert issues[0].path == "concepts/invalid.md"
 
 
@@ -198,7 +369,7 @@ def test_page_type_must_match_directory_derived_broad_kind(tmp_path):
     issues = _issues_by_code(result, "page-type-mismatch")
     assert len(issues) == 1
     assert issues[0].severity == "error"
-    assert issues[0].category == "schema"
+    assert issues[0].category == "structure"
     assert issues[0].path == "entities/ada.md"
     assert issues[0].details == {"expected": "entity", "actual": "person"}
 
@@ -256,7 +427,7 @@ def test_duplicate_claim_ids_create_schema_error(tmp_path):
     issues = _issues_by_code(result, "duplicate-claim-id")
     assert len(issues) == 1
     assert issues[0].severity == "error"
-    assert issues[0].category == "schema"
+    assert issues[0].category == "structure"
     assert issues[0].claim_id == "claim:duplicate"
     assert issues[0].details["id"] == "claim:duplicate"
     assert issues[0].details["paths"] == ["concepts/one.md", "concepts/two.md"]
