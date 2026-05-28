@@ -29,8 +29,6 @@ def _bootstrap_checkout_imports() -> None:
 
 _bootstrap_checkout_imports()
 
-from hermes_memory_wiki import plugin
-
 
 REQUIRED_STEPS = [
     "register",
@@ -134,6 +132,8 @@ def _run(vault_path: Path) -> dict[str, Any]:
     if not os.environ.get("OPENAI_API_KEY"):
         raise RuntimeError("OPENAI_API_KEY is required for live OpenAI smoke workflow")
 
+    from hermes_memory_wiki import plugin
+
     ctx = FakeContext()
     plugin.register(ctx)
     base_args = {"vaultPath": str(vault_path)}
@@ -223,6 +223,11 @@ def run_live_openai_smoke_workflow(vault_path: str | Path | None = None) -> dict
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--vault-path", type=Path, help="Vault path to use instead of a temporary directory.")
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit JSON output (currently the only output format; accepted for explicit smoke invocations).",
+    )
     args = parser.parse_args(argv)
 
     try:

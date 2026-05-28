@@ -19,7 +19,7 @@ def test_live_smoke_script_bootstraps_checkout_imports_without_api_key() -> None
         interpreter = Path(sys.executable)
 
     result = subprocess.run(
-        [str(interpreter), str(script)],
+        [str(interpreter), "-S", str(script), "--json"],
         cwd=repo_root,
         env=env,
         text=True,
