@@ -65,7 +65,7 @@ Run the default offline suite without network/API calls:
 .venv/bin/python -m pytest -q
 ```
 
-Live OpenAI tests are opt-in and marked `live_openai`; they are skipped unless `HERMES_MEMORY_WIKI_LIVE_OPENAI=1` and `OPENAI_API_KEY` are set. See [Development](docs/development.md) for the current live-test commands and status.
+Live OpenAI tests are opt-in and marked `live_openai`; they are skipped unless `HERMES_MEMORY_WIKI_LIVE_OPENAI=1` and `OPENAI_API_KEY` are set. The first live test module, `tests/live/test_openai_embeddings.py`, validates the real OpenAI embedding provider contract. See [Development](docs/development.md) for the current live-test commands and status.
 
 ## Goals
 

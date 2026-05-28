@@ -19,8 +19,8 @@ Build and verify opt-in live OpenAI and pre-install plugin integration tests for
 ## Current Status
 
 - [x] Plan created and committed in `439ffb2 docs: plan live integration tests`.
-- [x] Task 1: live pytest gating.
-- [ ] Task 2: live OpenAI embedding provider tests.
+- [x] Task 1: live pytest gating implemented in `tests/conftest.py` and `pyproject.toml`.
+- [x] Task 2: live OpenAI embedding provider tests implemented in `tests/live/test_openai_embeddings.py`.
 - [ ] Task 3: live vector reindex/search tests.
 - [ ] Task 4: reusable live plugin tool smoke script/tests.
 - [ ] Task 5: pre-install plugin layout simulation tests.
@@ -38,11 +38,20 @@ Task 1 verification on 2026-05-28:
 
 Result: marker registration visible; 195 tests passed.
 
+Task 2 verification on 2026-05-28:
+
+```bash
+.venv/bin/python -m pytest tests/live/test_openai_embeddings.py -q
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live/test_openai_embeddings.py -q
+```
+
+Result: default run skipped 2 live tests; opt-in live run passed 2 tests.
+
 ## Environment and Secrets
 
-- `OPENAI_API_KEY` was found in `/home/langley/.openclaw/.env` and copied to `/home/langley/.hermes/.env` with mode `0600`.
+- `OPENAI_API_KEY` must be supplied from the caller's local secret manager or untracked environment.
 - Live tests must be gated by `HERMES_MEMORY_WIKI_LIVE_OPENAI=1` plus `OPENAI_API_KEY`.
-- Do not print the API key. Do not commit `.env` files.
+- Do not print the API key. Do not commit `.env` files or local secret-file paths.
 
 ## Required Workflow
 
@@ -74,13 +83,13 @@ Offline/default:
 Live OpenAI:
 
 ```bash
-set -a; . /home/langley/.hermes/.env; set +a; HERMES_MEMORY_WIKI_LIVE_OPENAI=1 .venv/bin/python -m pytest tests/live -q
-set -a; . /home/langley/.hermes/.env; set +a; .venv/bin/python scripts/smoke_live_openai.py
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live -q
+OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python scripts/smoke_live_openai.py
 ```
 
 ## Next Action
 
-Start Task 2 from the implementation plan: add `tests/live/test_openai_embeddings.py` with opt-in live OpenAI embedding provider contract tests.
+Start Task 3 from the implementation plan: add `tests/live/test_live_reindex_search.py` for live vector reindex and hybrid search on a temporary synthetic vault.
 
 ## Paste-Into-New-Chat Prompt
 

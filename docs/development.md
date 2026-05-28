@@ -73,7 +73,7 @@ Run the default non-live suite without network/API calls:
 When live tests exist and are explicitly allowed, run them with:
 
 ```bash
-set -a; . /home/langley/.hermes/.env; set +a; HERMES_MEMORY_WIKI_LIVE_OPENAI=1 .venv/bin/python -m pytest tests/live -q
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live -q
 ```
 
 You can inspect the marker registration with:
@@ -92,7 +92,9 @@ Requirements and expectations:
 Current live-testing implementation status:
 
 - 2026-05-28: pytest marker/gating infrastructure added in `tests/conftest.py` and `pyproject.toml`.
+- 2026-05-28: live OpenAI embedding provider contract tests added in `tests/live/test_openai_embeddings.py`.
 - 2026-05-28 verification: `.venv/bin/python -m pytest --markers | grep live_openai` shows the marker; `.venv/bin/python -m pytest -q` passed with 195 tests.
+- 2026-05-28 live verification: default `tests/live/test_openai_embeddings.py` run skipped 2 tests; opt-in live run passed 2 tests.
 
 ## Source-reference notes
 
