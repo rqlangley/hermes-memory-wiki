@@ -12,6 +12,7 @@ EXPECTED_SKILLS = {
             "wiki_search",
             "wiki_get",
             "wiki_apply",
+            "wiki_ingest",
             "wiki_compile",
             "wiki_reindex",
             "wiki_lint",
@@ -19,7 +20,7 @@ EXPECTED_SKILLS = {
     },
     "wiki-authoring": {
         "relative_path": Path("skills/wiki-authoring/SKILL.md"),
-        "tools": {"wiki_get", "wiki_apply", "wiki_compile", "wiki_lint"},
+        "tools": {"wiki_get", "wiki_apply", "wiki_ingest", "wiki_compile", "wiki_lint"},
     },
     "wiki-search": {
         "relative_path": Path("skills/wiki-search/SKILL.md"),
@@ -33,6 +34,7 @@ EXPECTED_TOOLS = {
     "wiki_search",
     "wiki_get",
     "wiki_apply",
+    "wiki_ingest",
     "wiki_compile",
     "wiki_reindex",
     "wiki_lint",
@@ -146,3 +148,27 @@ def test_skill_docs_describe_openclaw_compatible_schema_without_page_type_person
     maintainer = _read_skill_text(ctx.skills["wiki-maintainer"]["path"])
     for term in ("wiki_status", "wiki_compile", "wiki_lint", "wiki_reindex", "search smoke"):
         assert term in maintainer
+
+
+def test_authoring_and_maintainer_skills_teach_source_backed_workflow():
+    ctx = _registered_context()
+
+    authoring = _read_skill_text(ctx.skills["wiki-authoring"]["path"])
+    maintainer = _read_skill_text(ctx.skills["wiki-maintainer"]["path"])
+    combined = f"{authoring}\n{maintainer}"
+
+    for term in (
+        "wiki_ingest",
+        "conversation-summary",
+        "local-file",
+        "upsert_entity",
+        "upsert_concept",
+        "create_synthesis",
+        "sourceIds",
+        "deterministic",
+        "no hidden tool-layer LLM calls",
+    ):
+        assert term in combined
+
+    assert "wiki_get" in authoring and "wiki_search" in authoring
+    assert "before editing" in authoring

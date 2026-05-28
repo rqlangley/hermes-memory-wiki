@@ -177,6 +177,22 @@ def test_create_synthesis_preserves_existing_id_when_overwriting(tmp_path):
     assert doc.frontmatter["id"] == "synthesis.existing"
 
 
+def test_create_synthesis_rejects_leaf_symlink_without_mutating_target(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    target = config.vault_path / "target.md"
+    original = "target content\n"
+    target.write_text(original, encoding="utf-8")
+    link = config.vault_path / "syntheses" / "project-alpha-memory-rag.md"
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(target)
+
+    with pytest.raises(ValueError, match="symlink"):
+        apply_mutation(config, normalize_mutation(_base_raw()))
+
+    assert target.read_text(encoding="utf-8") == original
+
+
 @pytest.mark.parametrize(
     "claims,match",
     [
@@ -256,6 +272,272 @@ def test_create_synthesis_preserves_human_notes_on_update(tmp_path):
     assert "Project Alpha uses retrieval augmented memory." not in doc.body
     assert "Keep this hand-written note." in doc.body
     assert doc.frontmatter["status"] == "published"
+
+
+def _entity_raw(**overrides):
+    raw = {
+        "op": "upsert_entity",
+        "title": "Alice Example",
+        "entityType": "person",
+        "aliases": ["Ally", " A. Example "],
+        "body": "Alice maintains the memory wiki.",
+        "sourceIds": ["source.chat-1"],
+        "claims": [{"text": "Alice owns the wiki rollout.", "status": "supported"}],
+        "status": "draft",
+        "confidence": 0.8,
+    }
+    raw.update(overrides)
+    return raw
+
+
+@pytest.mark.parametrize("missing", ["title", "body", "sourceIds", "entityType"])
+def test_normalize_upsert_entity_requires_title_body_source_ids_and_entity_type(missing):
+    raw = _entity_raw()
+    raw.pop(missing)
+
+    with pytest.raises(ValueError, match=missing):
+        normalize_mutation(raw)
+
+
+def test_upsert_entity_writes_deterministic_entities_path_default_id_and_frontmatter(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+
+    result = apply_mutation(config, normalize_mutation(_entity_raw()))
+
+    assert result.created is True
+    assert result.path == "entities/alice-example.md"
+    assert result.id == "entity.alice-example"
+    doc = parse_wiki_markdown((config.vault_path / result.path).read_text(encoding="utf-8"))
+    assert doc.frontmatter["id"] == "entity.alice-example"
+    assert doc.frontmatter["title"] == "Alice Example"
+    assert doc.frontmatter["pageType"] == "entity"
+    assert doc.frontmatter["entityType"] == "person"
+    assert doc.frontmatter["sourceIds"] == ["source.chat-1"]
+    assert doc.frontmatter["claims"] == [{"text": "Alice owns the wiki rollout.", "status": "supported"}]
+    assert doc.frontmatter["aliases"] == ["Ally", "A. Example"]
+    assert doc.frontmatter["status"] == "draft"
+    assert doc.frontmatter["confidence"] == 0.8
+    assert re.match(r"^\d{4}-\d{2}-\d{2}T", doc.frontmatter["updatedAt"])
+
+
+def test_upsert_entity_writes_generated_summary_and_human_notes_blocks(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+
+    result = apply_mutation(config, normalize_mutation(_entity_raw()))
+
+    body = parse_wiki_markdown((config.vault_path / result.path).read_text(encoding="utf-8")).body
+    assert body.startswith("# Alice Example\n")
+    assert HERMES_GENERATED_START in body
+    assert "## Summary" in body
+    assert "Alice maintains the memory wiki." in body
+    assert HERMES_GENERATED_END in body
+    assert f"{HERMES_HUMAN_START}\n## Human Notes\n\n{HERMES_HUMAN_END}" in body
+
+
+def test_upsert_entity_refresh_preserves_existing_id_and_human_notes(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    first = apply_mutation(config, normalize_mutation(_entity_raw()))
+    page_path = config.vault_path / first.path
+    text = page_path.read_text(encoding="utf-8").replace("id: entity.alice-example", "id: entity.alice-existing")
+    text = text.replace(
+        f"{HERMES_HUMAN_START}\n## Human Notes\n\n{HERMES_HUMAN_END}",
+        f"{HERMES_HUMAN_START}\n## Human Notes\n\nKeep entity note.\n{HERMES_HUMAN_END}",
+    )
+    page_path.write_text(text, encoding="utf-8")
+
+    result = apply_mutation(config, normalize_mutation(_entity_raw(body="Updated entity summary.")))
+
+    assert result.created is False
+    assert result.path == first.path
+    assert result.id == "entity.alice-existing"
+    doc = parse_wiki_markdown(page_path.read_text(encoding="utf-8"))
+    assert doc.frontmatter["id"] == "entity.alice-existing"
+    assert "Updated entity summary." in doc.body
+    assert "Keep entity note." in doc.body
+
+
+def test_upsert_entity_refresh_preserves_custom_frontmatter(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    first = apply_mutation(config, normalize_mutation(_entity_raw()))
+    page_path = config.vault_path / first.path
+    text = page_path.read_text(encoding="utf-8")
+    text = text.replace(
+        "pageType: entity",
+        "pageType: entity\ncanonicalId: people/alice\nprivacyTier: private\ncustomField: keep-me",
+    )
+    page_path.write_text(text, encoding="utf-8")
+
+    apply_mutation(config, normalize_mutation(_entity_raw(body="Updated entity summary.", aliases=[])))
+
+    doc = parse_wiki_markdown(page_path.read_text(encoding="utf-8"))
+    assert doc.frontmatter["canonicalId"] == "people/alice"
+    assert doc.frontmatter["privacyTier"] == "private"
+    assert doc.frontmatter["customField"] == "keep-me"
+    assert doc.frontmatter["entityType"] == "person"
+    assert "aliases" not in doc.frontmatter
+
+
+def test_upsert_entity_rejects_leaf_symlink_without_mutating_target(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    target = config.vault_path / "target.md"
+    original = "target content\n"
+    target.write_text(original, encoding="utf-8")
+    link = config.vault_path / "entities" / "alice-example.md"
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(target)
+
+    with pytest.raises(ValueError, match="symlink"):
+        apply_mutation(config, normalize_mutation(_entity_raw()))
+
+    assert target.read_text(encoding="utf-8") == original
+
+
+def test_upsert_entity_lookup_updates_existing_entity_and_preserves_path_and_id(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    page_path = config.vault_path / "entities" / "manual-alice.md"
+    page_path.write_text(
+        "---\nid: entity.manual-alice\ntitle: Alice Manual\npageType: entity\nentityType: person\n---\n# Alice Manual\n\n"
+        f"{HERMES_HUMAN_START}\n## Human Notes\n\nManual note.\n{HERMES_HUMAN_END}\n",
+        encoding="utf-8",
+    )
+
+    result = apply_mutation(config, normalize_mutation(_entity_raw(lookup="entity.manual-alice", title="Alice Renamed")))
+
+    assert result.created is False
+    assert result.path == "entities/manual-alice.md"
+    assert result.id == "entity.manual-alice"
+    doc = parse_wiki_markdown(page_path.read_text(encoding="utf-8"))
+    assert doc.frontmatter["id"] == "entity.manual-alice"
+    assert doc.frontmatter["title"] == "Alice Renamed"
+    assert "Manual note." in doc.body
+
+
+def test_upsert_entity_lookup_refuses_wrong_broad_page_type(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    synthesis = apply_mutation(config, normalize_mutation(_base_raw()))
+
+    with pytest.raises(ValueError, match="pageType.*entity"):
+        apply_mutation(config, normalize_mutation(_entity_raw(lookup=synthesis.id)))
+
+
+
+def _concept_raw(**overrides):
+    raw = {
+        "op": "upsert_concept",
+        "title": "Retrieval Augmented Memory",
+        "body": "Retrieval augmented memory combines recall and grounded notes.",
+        "sourceIds": ["source.note-1"],
+        "claims": [{"text": "RAM links source-backed facts into wiki pages."}],
+        "questions": ["How fresh is the index?"],
+        "contradictions": ["One source says vector search is disabled."],
+        "status": "draft",
+        "confidence": 0.7,
+    }
+    raw.update(overrides)
+    return raw
+
+
+@pytest.mark.parametrize("missing", ["title", "body", "sourceIds"])
+def test_normalize_upsert_concept_requires_title_body_and_source_ids(missing):
+    raw = _concept_raw()
+    raw.pop(missing)
+
+    with pytest.raises(ValueError, match=missing):
+        normalize_mutation(raw)
+
+
+def test_upsert_concept_writes_concepts_path_default_id_and_frontmatter(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+
+    result = apply_mutation(config, normalize_mutation(_concept_raw()))
+
+    assert result.created is True
+    assert result.path == "concepts/retrieval-augmented-memory.md"
+    assert result.id == "concept.retrieval-augmented-memory"
+    doc = parse_wiki_markdown((config.vault_path / result.path).read_text(encoding="utf-8"))
+    assert doc.frontmatter["id"] == "concept.retrieval-augmented-memory"
+    assert doc.frontmatter["title"] == "Retrieval Augmented Memory"
+    assert doc.frontmatter["pageType"] == "concept"
+    assert "entityType" not in doc.frontmatter
+    assert doc.frontmatter["sourceIds"] == ["source.note-1"]
+    assert doc.frontmatter["claims"] == [{"text": "RAM links source-backed facts into wiki pages."}]
+    assert doc.frontmatter["questions"] == ["How fresh is the index?"]
+    assert doc.frontmatter["contradictions"] == ["One source says vector search is disabled."]
+    assert doc.frontmatter["status"] == "draft"
+    assert doc.frontmatter["confidence"] == 0.7
+    assert re.match(r"^\d{4}-\d{2}-\d{2}T", doc.frontmatter["updatedAt"])
+
+
+def test_upsert_concept_preserves_existing_id_and_human_notes_on_refresh(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    first = apply_mutation(config, normalize_mutation(_concept_raw()))
+    page_path = config.vault_path / first.path
+    text = page_path.read_text(encoding="utf-8").replace(
+        "id: concept.retrieval-augmented-memory", "id: concept.existing-memory"
+    )
+    text = text.replace(
+        f"{HERMES_HUMAN_START}\n## Human Notes\n\n{HERMES_HUMAN_END}",
+        f"{HERMES_HUMAN_START}\n## Human Notes\n\nKeep concept note.\n{HERMES_HUMAN_END}",
+    )
+    page_path.write_text(text, encoding="utf-8")
+
+    result = apply_mutation(config, normalize_mutation(_concept_raw(body="Updated concept summary.")))
+
+    assert result.created is False
+    assert result.path == first.path
+    assert result.id == "concept.existing-memory"
+    doc = parse_wiki_markdown(page_path.read_text(encoding="utf-8"))
+    assert doc.frontmatter["id"] == "concept.existing-memory"
+    assert "Updated concept summary." in doc.body
+    assert "Keep concept note." in doc.body
+
+
+def test_upsert_concept_refresh_preserves_custom_frontmatter_and_removes_entity_type(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    first = apply_mutation(config, normalize_mutation(_concept_raw()))
+    page_path = config.vault_path / first.path
+    text = page_path.read_text(encoding="utf-8")
+    text = text.replace(
+        "pageType: concept",
+        "pageType: concept\ncanonicalId: concepts/ram\nprivacyTier: public\ncustomField: keep-me\nentityType: stale",
+    )
+    page_path.write_text(text, encoding="utf-8")
+
+    apply_mutation(
+        config,
+        normalize_mutation(
+            _concept_raw(body="Updated concept summary.", questions=[], contradictions=[], confidence=None)
+        ),
+    )
+
+    doc = parse_wiki_markdown(page_path.read_text(encoding="utf-8"))
+    assert doc.frontmatter["canonicalId"] == "concepts/ram"
+    assert doc.frontmatter["privacyTier"] == "public"
+    assert doc.frontmatter["customField"] == "keep-me"
+    assert "entityType" not in doc.frontmatter
+    assert "questions" not in doc.frontmatter
+    assert "contradictions" not in doc.frontmatter
+    assert "confidence" not in doc.frontmatter
+
+
+def test_upsert_concept_lookup_refuses_wrong_broad_page_type(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    entity = apply_mutation(config, normalize_mutation(_entity_raw()))
+
+    with pytest.raises(ValueError, match="pageType.*concept"):
+        apply_mutation(config, normalize_mutation(_concept_raw(lookup=entity.id)))
+
 
 
 def _update_raw(**overrides):

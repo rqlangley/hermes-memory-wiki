@@ -10,6 +10,7 @@ from hermes_memory_wiki.apply import apply_mutation, normalize_mutation
 from hermes_memory_wiki.compile import compile_vault
 from hermes_memory_wiki.config import MemoryWikiConfig, load_config
 from hermes_memory_wiki.hybrid_search import search_wiki
+from hermes_memory_wiki.ingest import ingest_source
 from hermes_memory_wiki.lint import lint_vault
 from hermes_memory_wiki.vault import METADATA_DIRECTORY, get_page, initialize_vault, read_queryable_pages
 from hermes_memory_wiki.vector_index import reindex_vault
@@ -75,13 +76,15 @@ def _tool_specs() -> list[JsonDict]:
         ),
         _spec(
             "wiki_apply",
-            "Apply a structured memory wiki mutation.",
+            "Apply a structured memory wiki mutation (create synthesis, update metadata, or typed entity/concept upsert).",
             _schema(
                 {
                     **_vault_path_property(),
-                    "op": {"type": "string", "enum": ["create_synthesis", "update_metadata"]},
+                    "op": {"type": "string", "enum": ["create_synthesis", "update_metadata", "upsert_entity", "upsert_concept"]},
                     "lookup": {"type": "string"},
                     "title": {"type": "string"},
+                    "entityType": {"type": "string"},
+                    "aliases": {"type": "array", "items": {"type": "string"}},
                     "body": {"type": "string"},
                     "sourceIds": {"type": "array", "items": {"type": "string"}},
                     "claims": {"type": "array", "items": _claim_schema()},
@@ -94,6 +97,24 @@ def _tool_specs() -> list[JsonDict]:
                 required=["op"],
             ),
             wiki_apply,
+        ),
+        _spec(
+            "wiki_ingest",
+            "Ingest a source into the memory wiki vault.",
+            _schema(
+                {
+                    **_vault_path_property(),
+                    "sourceType": {"type": "string", "enum": ["local-file", "conversation-summary", "text"]},
+                    "title": {"type": "string"},
+                    "inputPath": {"type": "string"},
+                    "body": {"type": "string"},
+                    "sessionId": {"type": "string"},
+                    "messageRange": {"type": "string"},
+                    "sourcePath": {"type": "string"},
+                },
+                required=["sourceType"],
+            ),
+            wiki_ingest,
         ),
         _spec("wiki_compile", "Compile deterministic wiki indexes and caches.", _schema(_vault_path_property()), wiki_compile),
         _spec(
@@ -288,6 +309,30 @@ def wiki_apply(args: Mapping[str, Any] | None = None) -> str:
         },
     }
     return _response(f"Applied memory wiki mutation to {result.path}.", details)
+
+
+def wiki_ingest(args: Mapping[str, Any] | None = None) -> str:
+    raw = _args(args)
+    config = _config(raw)
+    initialize_vault(config)
+    result = ingest_source(config, raw)
+    compile_result = compile_vault(config)
+    details = {
+        "path": result.path,
+        "id": result.id,
+        "title": result.title,
+        "sourceType": result.source_type,
+        "bytes": result.bytes,
+        "created": result.created,
+        "changed": result.changed,
+        "compile": {
+            "pageCounts": dict(compile_result.page_counts),
+            "claimCount": compile_result.claim_count,
+            "updatedFiles": _paths(compile_result.updated_files),
+            "updatedFileCount": len(compile_result.updated_files),
+        },
+    }
+    return _response(f"Ingested memory wiki source {result.title} to {result.path}.", details)
 
 
 def wiki_compile(args: Mapping[str, Any] | None = None) -> str:

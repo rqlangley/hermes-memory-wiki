@@ -17,7 +17,7 @@ from hermes_memory_wiki.markdown import (
     render_wiki_markdown,
     replace_managed_block,
 )
-from hermes_memory_wiki.paths import safe_join, to_display_path
+from hermes_memory_wiki.paths import normalize_relative_path, safe_join, to_display_path
 from hermes_memory_wiki.vault import get_page
 
 
@@ -29,6 +29,8 @@ class WikiMutation:
     title: str = ""
     body: str = ""
     source_ids: list[str] = field(default_factory=list)
+    entity_type: str = ""
+    aliases: list[str] = field(default_factory=list)
     claims: list[dict[str, Any]] = field(default_factory=list)
     questions: list[str] = field(default_factory=list)
     contradictions: list[str] = field(default_factory=list)
@@ -55,6 +57,10 @@ def normalize_mutation(raw: Mapping[str, Any]) -> WikiMutation:
     mutation_type = _required_string(raw, "op")
     if mutation_type == "update_metadata":
         return _normalize_update_metadata(raw)
+    if mutation_type == "upsert_entity":
+        return _normalize_upsert_entity(raw)
+    if mutation_type == "upsert_concept":
+        return _normalize_upsert_concept(raw)
     if mutation_type != "create_synthesis":
         raise ValueError(f"unsupported mutation op: {mutation_type}")
 
@@ -79,9 +85,46 @@ def apply_mutation(config: MemoryWikiConfig, mutation: WikiMutation) -> ApplyRes
     """Apply a normalized wiki mutation to the configured vault."""
     if mutation.type == "update_metadata":
         return _apply_update_metadata(config, mutation)
+    if mutation.type == "upsert_entity":
+        return _apply_upsert_typed_page(config, mutation, page_type="entity")
+    if mutation.type == "upsert_concept":
+        return _apply_upsert_typed_page(config, mutation, page_type="concept")
     if mutation.type != "create_synthesis":
         raise ValueError(f"unsupported mutation type: {mutation.type}")
     return _apply_create_synthesis(config, mutation)
+
+
+def _normalize_upsert_entity(raw: Mapping[str, Any]) -> WikiMutation:
+    return WikiMutation(
+        type="upsert_entity",
+        title=_required_string(raw, "title"),
+        body=_required_string(raw, "body"),
+        source_ids=_required_string_list(raw, "sourceIds"),
+        entity_type=_required_string(raw, "entityType"),
+        aliases=_string_list(raw.get("aliases")),
+        claims=_claims(raw.get("claims")),
+        questions=_string_list(raw.get("questions")),
+        contradictions=_string_list(raw.get("contradictions")),
+        confidence=_optional_confidence(raw.get("confidence")),
+        status=_optional_string(raw.get("status")) or "active",
+        lookup=_optional_string(raw.get("lookup")),
+    )
+
+
+def _normalize_upsert_concept(raw: Mapping[str, Any]) -> WikiMutation:
+    return WikiMutation(
+        type="upsert_concept",
+        title=_required_string(raw, "title"),
+        body=_required_string(raw, "body"),
+        source_ids=_required_string_list(raw, "sourceIds"),
+        claims=_claims(raw.get("claims")),
+        questions=_string_list(raw.get("questions")),
+        contradictions=_string_list(raw.get("contradictions")),
+        confidence=_optional_confidence(raw.get("confidence")),
+        status=_optional_string(raw.get("status")) or "active",
+        lookup=_optional_string(raw.get("lookup")),
+    )
+
 
 
 def _normalize_update_metadata(raw: Mapping[str, Any]) -> WikiMutation:
@@ -119,6 +162,7 @@ def _apply_update_metadata(config: MemoryWikiConfig, mutation: WikiMutation) -> 
     if page is None:
         raise FileNotFoundError(f"wiki page not found for lookup: {lookup}")
 
+    _reject_leaf_symlink(config, page.path)
     path = safe_join(config.vault_path, page.path)
     if not path.is_file():
         raise FileNotFoundError(f"wiki page not found at resolved path: {page.path}")
@@ -159,6 +203,7 @@ def _apply_create_synthesis(config: MemoryWikiConfig, mutation: WikiMutation) ->
     slug = _slugify(mutation.title)
     relative_path = f"syntheses/{slug}.md"
     page_id = f"synthesis.{slug}"
+    _reject_leaf_symlink(config, relative_path)
     path = safe_join(config.vault_path, relative_path)
     display_path = to_display_path(config.vault_path, path)
     _validate_synthesis_path(display_path)
@@ -197,11 +242,86 @@ def _apply_create_synthesis(config: MemoryWikiConfig, mutation: WikiMutation) ->
     return ApplyResult(path=display_path, id=page_id, created=created)
 
 
+def _apply_upsert_typed_page(config: MemoryWikiConfig, mutation: WikiMutation, *, page_type: str) -> ApplyResult:
+    if mutation.lookup:
+        page = get_page(config, mutation.lookup)
+        if page is None:
+            raise FileNotFoundError(f"wiki page not found for lookup: {mutation.lookup}")
+        actual_page_type = getattr(page.page, "page_type", None)
+        if actual_page_type != page_type:
+            raise ValueError(f"lookup resolved to pageType {actual_page_type!r}; expected {page_type}")
+        relative_path = page.path
+        page_id = page.id
+        _reject_leaf_symlink(config, relative_path)
+        path = safe_join(config.vault_path, relative_path)
+        created = False
+    else:
+        slug = _slugify(mutation.title, fallback=page_type)
+        directory = _page_type_directory(page_type)
+        relative_path = f"{directory}/{slug}.md"
+        page_id = f"{page_type}.{slug}"
+        _reject_leaf_symlink(config, relative_path)
+        path = safe_join(config.vault_path, relative_path)
+        created = not path.exists()
+
+    display_path = to_display_path(config.vault_path, path)
+    _validate_typed_page_path(display_path, page_type)
+
+    existing_doc: WikiMarkdown | None = None
+    if path.exists():
+        if not path.is_file():
+            raise IsADirectoryError(f"wiki page path exists and is not a file: {path}")
+        existing_doc = parse_wiki_markdown(path.read_text(encoding="utf-8"))
+        existing_body = existing_doc.body
+        page_id = _optional_string(existing_doc.frontmatter.get("id")) or page_id
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        existing_body = f"# {mutation.title}\n"
+
+    frontmatter = dict(existing_doc.frontmatter) if existing_doc else {}
+    frontmatter.update(
+        {
+            "id": page_id,
+            "title": mutation.title,
+            "pageType": page_type,
+            "sourceIds": mutation.source_ids,
+            "claims": mutation.claims,
+            "status": mutation.status,
+            "updatedAt": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    if page_type == "entity":
+        frontmatter["entityType"] = mutation.entity_type
+        _set_or_remove(frontmatter, "aliases", mutation.aliases)
+    else:
+        frontmatter.pop("entityType", None)
+        frontmatter.pop("aliases", None)
+    _set_or_remove(frontmatter, "questions", mutation.questions)
+    _set_or_remove(frontmatter, "contradictions", mutation.contradictions)
+    if mutation.confidence is None:
+        frontmatter.pop("confidence", None)
+    else:
+        frontmatter["confidence"] = mutation.confidence
+
+    body = replace_managed_block(existing_body, "Summary", mutation.body)
+    body = ensure_human_notes_block(body)
+    path.write_text(render_wiki_markdown(WikiMarkdown(frontmatter, body)), encoding="utf-8")
+
+    return ApplyResult(path=display_path, id=page_id, created=created)
+
+
 def _set_or_remove(frontmatter: dict[str, Any], key: str, value: Any) -> None:
     if value:
         frontmatter[key] = value
     else:
         frontmatter.pop(key, None)
+
+
+def _reject_leaf_symlink(config: MemoryWikiConfig, relative_path: str) -> None:
+    normalized = normalize_relative_path(relative_path)
+    leaf = config.vault_path.resolve() / normalized
+    if leaf.is_symlink():
+        raise ValueError(f"refusing to write wiki page through symlink: {relative_path}")
 
 
 def _required_string(raw: Mapping[str, Any], key: str) -> str:
@@ -244,6 +364,21 @@ def _validate_synthesis_path(display_path: str) -> None:
     path = PurePosixPath(display_path)
     if len(path.parts) != 2 or path.parts[0] != "syntheses" or path.suffix != ".md" or not path.stem:
         raise ValueError("create_synthesis path must match syntheses/<name>.md")
+
+
+def _validate_typed_page_path(display_path: str, page_type: str) -> None:
+    path = PurePosixPath(display_path)
+    directory = _page_type_directory(page_type)
+    if len(path.parts) != 2 or path.parts[0] != directory or path.suffix != ".md" or not path.stem:
+        raise ValueError(f"upsert_{page_type} path must match {directory}/<name>.md")
+
+
+def _page_type_directory(page_type: str) -> str:
+    if page_type == "entity":
+        return "entities"
+    if page_type == "concept":
+        return "concepts"
+    return f"{page_type}s"
 
 
 def _string_list(value: Any) -> list[str]:
@@ -323,7 +458,7 @@ def _evidence_list(value: Any) -> list[dict[str, Any]]:
     return evidence_items
 
 
-def _slugify(title: str) -> str:
+def _slugify(title: str, *, fallback: str = "synthesis") -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
     slug = re.sub(r"-+", "-", slug)
-    return slug or "synthesis"
+    return slug or fallback

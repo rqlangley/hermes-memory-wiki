@@ -8,6 +8,7 @@ provides_tools:
   - wiki_search
   - wiki_get
   - wiki_apply
+  - wiki_ingest
   - wiki_compile
   - wiki_reindex
   - wiki_lint
