@@ -72,8 +72,8 @@ Task 4 review-fix verification on 2026-05-28:
 
 ```bash
 .venv/bin/python -m pytest tests/test_smoke_live_openai_script.py -q
-HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPE...EY" .venv/bin/python -m pytest tests/live/test_live_tool_workflow.py -q
-env -u OPENAI_API_KEY -u PYTHONPATH /usr/bin/python3 -S scripts/smoke_live_openai.py
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live/test_live_tool_workflow.py -q
+env -u OPENAI_API_KEY -u PYTHONPATH /usr/bin/python3 -S scripts/smoke_live_openai.py --json
 ```
 
 Result: checkout import/bootstrap regression test passed; explicit `--json` missing-key CLI path returned safe JSON with exit code 1; opt-in live tool workflow still passed; bare-interpreter no-key CLI check returned JSON with exit code 1 instead of a traceback.
