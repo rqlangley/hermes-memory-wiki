@@ -73,6 +73,7 @@ def search_wiki(
     vector_available = not vector_messages
     if not vector_available:
         messages = list(vector_messages)
+        messages.append("Vector search unavailable; keyword fallback active.")
         messages.append("Falling back to keyword search because vector search is unavailable.")
         return keyword_results, SearchDiagnostics(
             requested_mode=requested_mode,

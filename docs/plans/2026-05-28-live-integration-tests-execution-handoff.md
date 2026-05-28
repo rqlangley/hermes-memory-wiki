@@ -24,7 +24,7 @@ Build and verify opt-in live OpenAI and pre-install plugin integration tests for
 - [x] Task 3: live vector reindex/search tests implemented in `tests/live/test_live_reindex_search.py`.
 - [x] Task 4: reusable live plugin tool smoke script/tests implemented in `scripts/smoke_live_openai.py` and `tests/live/test_live_tool_workflow.py`.
 - [x] Task 5: pre-install plugin layout simulation tests strengthened in `tests/test_user_plugin_layout.py`.
-- [ ] Task 6: negative-path/stale-index coverage.
+- [x] Task 6: negative-path/stale-index coverage.
 - [ ] Task 7: final verification/docs refresh.
 
 ## Latest Verification
@@ -90,6 +90,19 @@ RED result before the minimal schema fix: focused layout test failed because `wi
 
 GREEN result: focused pre-install layout simulation passed 6 tests; compileall passed; full default suite passed with 200 passed and 5 skipped. Commit: `test: strengthen pre-install plugin layout coverage`.
 
+Task 6 verification on 2026-05-28:
+
+```bash
+.venv/bin/python -m pytest tests/test_hybrid_search.py::test_keyword_only_results_are_returned_when_vector_unavailable tests/test_hybrid_search.py::test_hybrid_fallback_reports_missing_index_when_provider_exists -q
+.venv/bin/python -m pytest tests/test_reindex.py tests/test_hybrid_search.py tests/test_vector_index.py -q
+.venv/bin/python -m pytest -q
+.venv/bin/python -m compileall src tests scripts
+```
+
+RED result after adding stricter degradation assertions: focused run failed 2 hybrid fallback tests because diagnostics did not include an explicit `Vector search unavailable` message.
+
+GREEN result: focused negative/degradation/stale-index run passed 35 tests; compileall passed; full default suite passed with 204 passed and 5 skipped. Commit: `test: cover vector degradation and stale index paths`.
+
 ## Environment and Secrets
 
 - `OPENAI_API_KEY` must be supplied from the caller's local secret manager or untracked environment.
@@ -132,7 +145,7 @@ OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python scripts/smoke_live_openai.py
 
 ## Next Action
 
-Start Task 6 from the implementation plan: add deterministic negative-path and stale-index integration coverage.
+Start Task 7 from the implementation plan: run final verification and refresh the handoff/docs.
 
 ## Paste-Into-New-Chat Prompt
 

@@ -47,16 +47,24 @@ Run the pre-install Hermes user-plugin layout simulation:
 
 This offline test builds a fake Hermes home under pytest `tmp_path` with `plugins/memory-wiki` symlinked to the checkout, parses `plugin.yaml`, imports the root plugin entry point from that layout, calls `register(ctx)`, verifies expected tools and skills, and checks public tool-schema field casing (`vaultPath`, `searchMode`, `maxResults`, `lineCount`, `op`, etc.). It must not create or mutate any real `~/.hermes` profile.
 
+Run deterministic vector degradation and stale-index coverage:
+
+```bash
+.venv/bin/python -m pytest tests/test_reindex.py tests/test_hybrid_search.py tests/test_vector_index.py -q
+```
+
+These tests use `tmp_path`, fake embedding providers, and explicit environment removal such as `monkeypatch.delenv("OPENAI_API_KEY", raising=False)`. They cover clear missing-key diagnostics, keyword-only search without vectors, hybrid-to-keyword fallback diagnostics when no vector provider/index is available, incremental re-embedding of changed documents only, and deletion of stale vector documents for removed pages. They must not make network calls.
+
 Run a single test by node id:
 
 ```bash
 .venv/bin/python -m pytest tests/test_config.py::test_load_config_defaults -q
 ```
 
-Compile-check source and tests:
+Compile-check source, tests, and scripts:
 
 ```bash
-.venv/bin/python -m compileall src tests
+.venv/bin/python -m compileall src tests scripts
 ```
 
 Optionally verify the installed/importable package version:
@@ -104,6 +112,7 @@ Current live-testing implementation status:
 - 2026-05-28: live vector reindex/hybrid search tests added in `tests/live/test_live_reindex_search.py` using temporary synthetic vaults.
 - 2026-05-28: reusable live plugin tool smoke workflow added in `scripts/smoke_live_openai.py` with coverage in `tests/live/test_live_tool_workflow.py`.
 - 2026-05-28: pre-install user-plugin layout simulation strengthened in `tests/test_user_plugin_layout.py`; focused run passed with 6 tests, and full default suite passed with 200 tests and 5 live skips.
+- 2026-05-28: deterministic negative/degradation coverage strengthened across `tests/test_reindex.py`, `tests/test_hybrid_search.py`, and `tests/test_vector_index.py`; focused run passed with 35 tests, and full default suite passed with 204 tests and 5 live skips.
 - 2026-05-28 verification: `.venv/bin/python -m pytest --markers | grep live_openai` shows the marker; `.venv/bin/python -m pytest -q` passed with 195 tests.
 - 2026-05-28 live verification: default `tests/live/test_openai_embeddings.py` run skipped 2 tests; opt-in live run passed 2 tests.
 - 2026-05-28 live verification: default `tests/live/test_live_reindex_search.py` run skipped 2 tests; opt-in live run passed 2 tests; full default suite passed with 195 passed and 4 skipped.

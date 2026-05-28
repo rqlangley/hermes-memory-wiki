@@ -249,6 +249,39 @@ def test_vector_index_deletes_stale_documents_no_longer_present(tmp_path) -> Non
     assert embedding_ids == ["page:keep"]
 
 
+def test_vector_index_deletes_stale_claim_and_page_documents_for_removed_page(tmp_path) -> None:
+    provider = StubEmbeddingProvider()
+    keep = _doc("page:keep", page_path="topics/keep.md")
+    remove_page = _doc("page:remove", page_path="topics/remove.md")
+    remove_claim = SearchDocument(
+        id="claim:topics/remove.md:claim-one",
+        page_path="topics/remove.md",
+        kind="concept",
+        title="Remove",
+        doc_type="claim",
+        text="Claim text for removed page",
+        text_hash="hash-removed-claim",
+        metadata={"claim_id": "claim-one"},
+    )
+    index = VectorIndex(tmp_path / "vector.sqlite3")
+    index.upsert_documents([keep, remove_page, remove_claim])
+    index.store_embeddings(
+        provider,
+        [keep, remove_page, remove_claim],
+        [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [0.7, 0.8, 0.9]],
+    )
+
+    deleted_count = index.upsert_documents([keep])
+
+    with sqlite3.connect(tmp_path / "vector.sqlite3") as connection:
+        document_ids = [row[0] for row in connection.execute("SELECT id FROM documents ORDER BY id")]
+        embedding_ids = [row[0] for row in connection.execute("SELECT document_id FROM embeddings ORDER BY document_id")]
+
+    assert deleted_count == 2
+    assert document_ids == ["page:keep"]
+    assert embedding_ids == ["page:keep"]
+
+
 def test_vector_index_loads_all_embeddings_for_provider_model(tmp_path) -> None:
     provider = StubEmbeddingProvider(provider="stub", model="model-a", dimensions=3)
     other_provider = StubEmbeddingProvider(provider="other", model="model-a", dimensions=3)

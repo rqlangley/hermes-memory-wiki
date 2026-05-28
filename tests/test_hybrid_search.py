@@ -87,6 +87,42 @@ def test_keyword_only_results_are_returned_when_vector_unavailable(tmp_path, mon
     assert diagnostics.effective_mode == "keyword"
     assert diagnostics.vector_available is False
     assert any("Missing API key" in message for message in diagnostics.messages)
+    assert any("Vector search unavailable" in message for message in diagnostics.messages)
+    assert any("Falling back to keyword search" in message for message in diagnostics.messages)
+    assert results[0].metadata["search_type"] == "keyword"
+
+
+def test_keyword_mode_works_without_openai_key_or_vector_index(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    config = _config(tmp_path)
+    _write_page(tmp_path, "concepts/keyword-only.md", title="Keyword Only", body="keyword-only needle")
+
+    results, diagnostics = search_wiki(config, "keyword-only", search_mode="keyword")
+
+    assert [result.path for result in results] == ["concepts/keyword-only.md"]
+    assert diagnostics.requested_mode == "keyword"
+    assert diagnostics.effective_mode == "keyword"
+    assert diagnostics.vector_available is False
+    assert diagnostics.messages == []
+    assert results[0].metadata["search_type"] == "keyword"
+    assert not (tmp_path / METADATA_DIRECTORY / "vector" / "index.sqlite").exists()
+
+
+def test_hybrid_fallback_reports_missing_index_when_provider_exists(tmp_path) -> None:
+    config = _config(tmp_path)
+    _write_page(tmp_path, "concepts/keyword.md", title="Keyword Page", body="offline indexless needle")
+    provider = MappingEmbeddingProvider({"needle": [1.0, 0.0, 0.0]})
+
+    results, diagnostics = search_wiki(config, "needle", search_mode="hybrid", provider=provider)
+
+    assert [result.path for result in results] == ["concepts/keyword.md"]
+    assert diagnostics.requested_mode == "hybrid"
+    assert diagnostics.effective_mode == "keyword"
+    assert diagnostics.vector_available is False
+    assert any("Vector index not found" in message for message in diagnostics.messages)
+    assert any("Vector search unavailable" in message for message in diagnostics.messages)
+    assert any("Falling back to keyword search" in message for message in diagnostics.messages)
+    assert provider.calls == []
     assert results[0].metadata["search_type"] == "keyword"
 
 

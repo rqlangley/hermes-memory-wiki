@@ -181,6 +181,28 @@ def test_missing_api_key_returns_diagnostic_without_corrupting_index(tmp_path, m
     assert _index(config).load_embeddings(previous_provider) == previous_embeddings
 
 
+def test_default_openai_reindex_reports_missing_openai_api_key_without_live_call(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    config = _config(tmp_path)
+    initialize_vault(config)
+    _write_page(tmp_path, "concepts/offline.md", title="Offline", body="offline body")
+
+    result = reindex_vault(config)
+
+    assert result.embedded_count == 0
+    assert result.skipped_count == 0
+    assert result.deleted_count == 0
+    assert result.provider == "openai"
+    assert result.model == "text-embedding-3-small"
+    assert result.dimensions == 1536
+    assert result.diagnostics == [
+        "Missing API key for OpenAI embeddings provider "
+        "(provider=openai, model=text-embedding-3-small). "
+        "Set environment variable OPENAI_API_KEY."
+    ]
+    assert not (tmp_path / METADATA_DIRECTORY / "vector" / "index.sqlite").exists()
+
+
 def test_reindex_rejects_symlinked_vector_directory_without_writing_outside(tmp_path) -> None:
     config = _config(tmp_path / "vault")
     initialize_vault(config)
