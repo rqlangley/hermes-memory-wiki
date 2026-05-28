@@ -290,22 +290,22 @@ After reindexing, `wiki_search` can use `hybrid` or `vector` modes. Keyword sear
 
 ## Test and smoke configuration
 
-The default test suite stays offline and should pass without OpenAI credentials:
+The default test suite stays offline and should pass without OpenAI credentials. Use the Python interpreter for your checkout or development environment:
 
 ```bash
-.venv/bin/python -m pytest -q
+python -m pytest -q
 ```
 
 Live OpenAI tests require both the opt-in flag and an API key in the command environment:
 
 ```bash
-HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPE...EY" .venv/bin/python -m pytest tests/live -q
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" python -m pytest tests/live -q
 ```
 
 The live smoke script also reads `OPENAI_API_KEY` from the environment and prints a compact JSON summary without embedding vectors or secrets:
 
 ```bash
-OPENAI_API_KEY="$OPE...EY" .venv/bin/python scripts/smoke_live_openai.py --json
+OPENAI_API_KEY="$OPENAI_API_KEY" python scripts/smoke_live_openai.py --json
 ```
 
 ## Available tools

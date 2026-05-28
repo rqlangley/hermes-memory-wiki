@@ -2,7 +2,14 @@
 
 This guide documents the local development, test, contribution, and release workflow for `hermes-memory-wiki`.
 
-All commands assume you are running from the repository root and use the project virtual environment. Use `.venv/bin/python`; do not rely on a bare `python` command.
+All commands assume you are running from the repository root and use a project virtual environment. The repository does not commit `.venv/`; create it locally before using the `.venv/bin/python` commands below:
+
+```bash
+python -m venv .venv
+.venv/bin/python -m pip install -e '.[tests]'
+```
+
+Use `.venv/bin/python` for development commands after creating the environment; do not rely on a bare `python` command once the local venv exists.
 
 ## Development principles
 

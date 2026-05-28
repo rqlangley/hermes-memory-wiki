@@ -16,25 +16,25 @@ The manual steps below are useful for development, review, or environments where
 
 - A working Hermes Agent installation.
 - This repository checked out locally.
-- The Python environment that Hermes will use for user plugins. For development checkouts this may be the repository `.venv/`; for an existing Hermes install it may be the Hermes-managed venv.
+- The Python environment that Hermes will use for user plugins. For an existing Hermes install this is often a Hermes-managed venv; for development checkouts you may create your own local `.venv/`.
 - A fresh Hermes session after changing plugin or tool configuration.
 
 All commands below assume you are in the repository root.
 
 ## 1. Install the Python package in editable mode
 
-Install the package into the environment Hermes will use. If your checkout has a local `.venv/`, this usually looks like:
+Install the package into the environment Hermes will use. The generic command is:
 
 ```bash
-.venv/bin/python -m pip install -e .
+python -m pip install -e .
 ```
 
-If Hermes uses a managed venv, run the same editable install with that interpreter instead of `.venv/bin/python`. An agent-assisted install can determine this path automatically.
+Replace `python` with the Hermes-managed interpreter if Hermes uses a managed venv. If you are doing local development and want an isolated project environment, create it first with `python -m venv .venv`, install test dependencies, and then use `.venv/bin/python`. The `.venv/` directory is intentionally not committed to this repository.
 
 You can verify the package import non-destructively:
 
 ```bash
-.venv/bin/python -c 'import hermes_memory_wiki; print(hermes_memory_wiki.__version__)'
+python -c 'import hermes_memory_wiki; print(hermes_memory_wiki.__version__)'
 ```
 
 The project also exposes a Python entry point named `memory-wiki` under `hermes_agent.plugins`, but the user-plugin layout below is the recommended local development/install path for this repository.
@@ -227,14 +227,14 @@ If you do not want vector embeddings today, do not set `OPENAI_API_KEY`, skip `w
 Before enabling the plugin in a real Hermes profile, you can verify the checkout without touching `~/.hermes`:
 
 ```bash
-.venv/bin/python -m pytest tests/test_user_plugin_layout.py -q
+python -m pytest tests/test_user_plugin_layout.py -q
 ```
 
 Live OpenAI verification is opt-in and uses temporary synthetic vaults only:
 
 ```bash
-HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live -q
-OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python scripts/smoke_live_openai.py --json
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" python -m pytest tests/live -q
+OPENAI_API_KEY="$OPENAI_API_KEY" python scripts/smoke_live_openai.py --json
 ```
 
 ## Upgrade notes
@@ -243,7 +243,7 @@ For a symlink install, pull/update the repository, rerun the editable install if
 
 ```bash
 git pull
-.venv/bin/python -m pip install -e .
+python -m pip install -e .
 ```
 
 For a copy install, replace the copied plugin directory and restart Hermes.

@@ -31,15 +31,17 @@ The easiest installation path is to ask your Hermes agent to do it for you. For 
 Please clone https://github.com/rqlangley/hermes-memory-wiki, install it as an editable Hermes user plugin, enable the memory-wiki plugin and memory_wiki toolset, install the bundled wiki skills as native Hermes skills, then initialize the default wiki vault.
 ```
 
-That lets the agent adapt the steps to the active Hermes profile, venv, config location, and plugin layout. If you prefer to install manually, from this repository run:
+That lets the agent adapt the steps to the active Hermes profile, Python environment, config location, and plugin layout. If you prefer to install manually, run the editable install with the Python interpreter used by your Hermes installation, then link the checkout as a user plugin:
 
 ```bash
-.venv/bin/python -m pip install -e .
+python -m pip install -e .
 mkdir -p ~/.hermes/plugins
 ln -s "$PWD" ~/.hermes/plugins/memory-wiki
 mkdir -p ~/.hermes/skills/memory-wiki
 cp -a src/hermes_memory_wiki/skills/wiki-* ~/.hermes/skills/memory-wiki/
 ```
+
+This repository does not include a `.venv/` directory. A project-local virtual environment is only a development convenience; see the installation guide for environment choices.
 
 Enable the plugin in Hermes config:
 
@@ -84,7 +86,7 @@ If you do not want vector embeddings in the current user-plugin integration, do 
 Run the default offline suite without network/API calls:
 
 ```bash
-.venv/bin/python -m pytest -q
+python -m pytest -q
 ```
 
 Live OpenAI tests are opt-in and marked `live_openai`; they are skipped unless `HERMES_MEMORY_WIKI_LIVE_OPENAI=1` and `OPENAI_API_KEY` are set. Current live modules validate the real OpenAI embedding provider contract, live vector reindex/hybrid search on temporary synthetic vaults, and the actual plugin tool workflow. The offline suite also simulates a pre-install Hermes user-plugin layout under `tmp_path`, exercises deterministic missing-key/vector-degradation paths, verifies keyword fallback without a vector index or API key, and checks stale-index updates/deletions with fake providers only. Final verification on 2026-05-28 passed compileall, the default offline suite (`205 passed, 5 skipped`), the opt-in live suite (`5 passed`), and the live smoke script. For a manual pre-install smoke, run `scripts/smoke_live_openai.py --json` with `OPENAI_API_KEY` set. See [Development](docs/development.md) for the current live-test commands and status.
