@@ -248,6 +248,26 @@ For the first full build or after large changes, pass `force: true`:
 
 After reindexing, `wiki_search` can use `hybrid` or `vector` modes. Keyword search remains available without vector embeddings.
 
+## Test and smoke configuration
+
+The default test suite stays offline and should pass without OpenAI credentials:
+
+```bash
+.venv/bin/python -m pytest -q
+```
+
+Live OpenAI tests require both the opt-in flag and an API key in the command environment:
+
+```bash
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPE...EY" .venv/bin/python -m pytest tests/live -q
+```
+
+The live smoke script also reads `OPENAI_API_KEY` from the environment and prints a compact JSON summary without embedding vectors or secrets:
+
+```bash
+OPENAI_API_KEY="$OPE...EY" .venv/bin/python scripts/smoke_live_openai.py --json
+```
+
 ## Available tools
 
 - `wiki_init`: initialize the default vault, or the per-call `vaultPath` when supplied.

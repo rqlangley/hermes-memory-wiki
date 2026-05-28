@@ -25,7 +25,7 @@ Build and verify opt-in live OpenAI and pre-install plugin integration tests for
 - [x] Task 4: reusable live plugin tool smoke script/tests implemented in `scripts/smoke_live_openai.py` and `tests/live/test_live_tool_workflow.py`.
 - [x] Task 5: pre-install plugin layout simulation tests strengthened in `tests/test_user_plugin_layout.py`.
 - [x] Task 6: negative-path/stale-index coverage.
-- [ ] Task 7: final verification/docs refresh.
+- [x] Task 7: final verification/docs refresh.
 
 ## Latest Verification
 
@@ -103,6 +103,27 @@ RED result after adding stricter degradation assertions: focused run failed 2 hy
 
 GREEN result: focused negative/degradation/stale-index run passed 35 tests; compileall passed; full default suite passed with 204 passed and 5 skipped. Commit: `test: cover vector degradation and stale index paths`.
 
+Task 6 review-fix verification on 2026-05-28:
+
+```bash
+.venv/bin/python -m pytest tests/test_reindex.py tests/test_hybrid_search.py tests/test_vector_index.py -q
+.venv/bin/python -m pytest -q
+.venv/bin/python -m compileall src tests scripts
+```
+
+Result: duplicate hybrid fallback diagnostics were collapsed into one explicit message, reindex-level stale claim deletion coverage was added, focused run passed 36 tests, full default suite passed with 205 passed and 5 skipped, and compileall passed. Commit: `test: address vector degradation review feedback`.
+
+Task 7 final verification on 2026-05-28:
+
+```bash
+.venv/bin/python -m compileall src tests scripts
+.venv/bin/python -m pytest -q
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live -q
+OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python scripts/smoke_live_openai.py --json
+```
+
+Result: compileall passed; default offline suite passed with 205 passed and 5 skipped; opt-in live suite passed 5 tests; live smoke script returned an OK JSON summary with 8 registered tools, 3 registered skills, OpenAI provider/model `text-embedding-3-small`, 1536 dimensions, and no secret output.
+
 ## Environment and Secrets
 
 - `OPENAI_API_KEY` must be supplied from the caller's local secret manager or untracked environment.
@@ -145,7 +166,7 @@ OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python scripts/smoke_live_openai.py
 
 ## Next Action
 
-Start Task 7 from the implementation plan: run final verification and refresh the handoff/docs.
+Implementation plan tasks are complete. Next action: review git state, run final review gates if this handoff is resumed before merge, push `feature/live-integration-tests`, and merge only after validation remains green.
 
 ## Paste-Into-New-Chat Prompt
 

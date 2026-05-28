@@ -117,7 +117,7 @@ Current live-testing implementation status:
 - 2026-05-28 live verification: default `tests/live/test_openai_embeddings.py` run skipped 2 tests; opt-in live run passed 2 tests.
 - 2026-05-28 live verification: default `tests/live/test_live_reindex_search.py` run skipped 2 tests; opt-in live run passed 2 tests; full default suite passed with 195 passed and 4 skipped.
 - 2026-05-28 live verification: `tests/live/test_live_tool_workflow.py` opt-in run passed 1 test; `scripts/smoke_live_openai.py` produced an OK JSON summary with OpenAI embeddings; full default suite passed with 195 passed and 5 skipped.
-- 2026-05-28 review-fix verification: `tests/test_smoke_live_openai_script.py` confirms `scripts/smoke_live_openai.py` bootstraps source-checkout imports and returns JSON when `OPENAI_API_KEY` is missing, even under a bare `python3 -S` interpreter.
+- 2026-05-28 final verification: compileall passed; default offline suite passed with 205 tests and 5 live skips; full live suite passed with 5 tests; `scripts/smoke_live_openai.py --json` produced an OK JSON summary with OpenAI reindex details.
 
 ## Source-reference notes
 

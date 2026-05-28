@@ -164,6 +164,21 @@ For the first full rebuild, use:
 
 If you do not want vector embeddings today, do not set `OPENAI_API_KEY`, skip `wiki_reindex`, and use keyword search mode where available. Keyword search remains available without an API key. The Hermes config key `memory_wiki.embeddings.enabled` is part of the Python library config shape, but the current user-plugin handlers do not read it from Hermes config.
 
+## 7. Optional install verification
+
+Before enabling the plugin in a real Hermes profile, you can verify the checkout without touching `~/.hermes`:
+
+```bash
+.venv/bin/python -m pytest tests/test_user_plugin_layout.py -q
+```
+
+Live OpenAI verification is opt-in and uses temporary synthetic vaults only:
+
+```bash
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live -q
+OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python scripts/smoke_live_openai.py --json
+```
+
 ## Upgrade notes
 
 For a symlink install, pull/update the repository, rerun the editable install if packaging metadata or dependencies changed, and restart Hermes:
