@@ -2,22 +2,34 @@
 
 This guide installs `hermes-memory-wiki` as a user plugin. It does not require modifying Hermes Agent core files and has no OpenClaw runtime dependency.
 
+The recommended path is agent-assisted installation: ask your Hermes agent to clone this repository and install it into the active Hermes profile for you. That is usually safer than copying commands by hand because the agent can inspect the actual Hermes venv, plugin directory, config shape, enabled toolsets, and profile-specific skill location.
+
+Example prompt:
+
+```text
+Please clone https://github.com/rqlangley/hermes-memory-wiki, install it as an editable Hermes user plugin, enable the memory-wiki plugin and memory_wiki toolset, install the bundled wiki skills as native Hermes skills, then initialize the default wiki vault.
+```
+
+The manual steps below are useful for development, review, or environments where you prefer to control each command yourself.
+
 ## Prerequisites
 
 - A working Hermes Agent installation.
 - This repository checked out locally.
-- The repository virtual environment available at `.venv/`.
+- The Python environment that Hermes will use for user plugins. For development checkouts this may be the repository `.venv/`; for an existing Hermes install it may be the Hermes-managed venv.
 - A fresh Hermes session after changing plugin or tool configuration.
 
 All commands below assume you are in the repository root.
 
 ## 1. Install the Python package in editable mode
 
-Install the package into the environment Hermes will use:
+Install the package into the environment Hermes will use. If your checkout has a local `.venv/`, this usually looks like:
 
 ```bash
 .venv/bin/python -m pip install -e .
 ```
+
+If Hermes uses a managed venv, run the same editable install with that interpreter instead of `.venv/bin/python`. An agent-assisted install can determine this path automatically.
 
 You can verify the package import non-destructively:
 
