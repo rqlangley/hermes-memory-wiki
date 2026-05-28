@@ -11,6 +11,7 @@ metadata:
     - wiki_search
     - wiki_get
     - wiki_apply
+    - wiki_ingest
     - wiki_compile
     - wiki_reindex
     - wiki_lint
@@ -18,7 +19,7 @@ metadata:
 
 ## Overview
 
-Maintain Hermes memory wiki vaults safely with the native wiki tools and the OpenClaw-compatible schema. Use this skill to initialize a vault, inspect status, review content, preserve human-authored notes, rebuild generated artifacts, refresh search indexes, and validate health.
+Maintain Hermes memory wiki vaults safely with the native wiki tools and the OpenClaw-compatible schema. Use this skill to initialize a vault, inspect status, ingest source material, review content, preserve human-authored notes, rebuild generated artifacts, refresh search indexes, and validate health.
 
 ## When to Use
 
@@ -33,11 +34,12 @@ Maintain Hermes memory wiki vaults safely with the native wiki tools and the Ope
 
 1. Run `wiki_status` to inspect the vault path, readiness, and current page counts.
 2. If the vault is absent, run `wiki_init` for the intended vault path.
-3. Run `wiki_compile` after content changes so indexes, reports, and cache files are current.
-4. Run `wiki_lint` and resolve blocking schema, link, duplicate, provenance, or vector issues.
-5. Run `wiki_reindex` when search freshness matters or after larger updates.
-6. Perform a search smoke check with `wiki_search` for a known page, source ID, or recent claim term.
-7. Use `wiki_get` to inspect exact content before any follow-up `wiki_apply` fixes.
+3. Run `wiki_ingest` when a local file, conversation summary, or pasted text should become a managed source page.
+4. Run `wiki_compile` after content changes so indexes, reports, and cache files are current.
+5. Run `wiki_lint` and resolve blocking schema, link, duplicate, provenance, or vector issues.
+6. Run `wiki_reindex` when search freshness matters or after larger updates.
+7. Perform a search smoke check with `wiki_search` for a known page, source ID, or recent claim term.
+8. Use `wiki_get` to inspect exact content before any follow-up `wiki_apply` fixes.
 
 ## Schema and Preservation Rules
 
@@ -71,7 +73,7 @@ Use these reports to plan targeted `wiki_apply` fixes, not broad rewrites.
 
 - `wiki_status` reports the expected vault.
 - Relevant pages were inspected with `wiki_search` and `wiki_get`.
-- Any edits were made through `wiki_apply`.
+- Source ingestion used `wiki_ingest` when applicable, and other edits were made through `wiki_apply`.
 - `wiki_compile` completed after changes.
 - `wiki_lint` reports no blocking errors, or remaining issues are documented.
 - `wiki_reindex` was run when search freshness mattered.

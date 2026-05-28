@@ -8,13 +8,14 @@ metadata:
   tools:
     - wiki_get
     - wiki_apply
+    - wiki_ingest
     - wiki_compile
     - wiki_lint
 ---
 
 ## Overview
 
-Author OpenClaw-compatible memory wiki content by reading existing context, applying the smallest useful mutation, compiling derived outputs, linting the vault, and refreshing search indexes when a tool workflow allows it. Prefer precise source-backed updates over broad rewrites.
+Author OpenClaw-compatible memory wiki content by reading existing context, ingesting source material when needed, applying the smallest useful mutation, compiling derived outputs, linting the vault, and refreshing search indexes when a tool workflow allows it. Prefer precise source-backed updates over broad rewrites.
 
 ## When to Use
 
@@ -69,11 +70,12 @@ claims:
 1. Use `wiki_get` to read the target page or nearest related page before changing anything.
 2. Check for an existing entity/concept/source to avoid duplicate pages.
 3. Prepare a minimal content change that matches the directory taxonomy and schema.
-4. Use `wiki_apply` to create or update the page.
-5. Run `wiki_compile` so generated indexes, reports, and cache files reflect the change.
-6. Run `wiki_lint` to catch malformed links, metadata issues, provenance gaps, or structural problems.
-7. If search freshness matters after the edit, use the maintenance workflow to run `wiki_reindex` before relying on search.
-8. If lint reports errors, inspect the affected page with `wiki_get`, then apply a focused fix with `wiki_apply`.
+4. Use `wiki_ingest` for source pages from local files, conversation summaries, or pasted text before citing them.
+5. Use `wiki_apply` to create or update synthesis/metadata pages.
+6. Run `wiki_compile` so generated indexes, reports, and cache files reflect the change.
+7. Run `wiki_lint` to catch malformed links, metadata issues, provenance gaps, or structural problems.
+8. If search freshness matters after the edit, use the maintenance workflow to run `wiki_reindex` before relying on search.
+9. If lint reports errors, inspect the affected page with `wiki_get`, then apply a focused fix with `wiki_apply`.
 
 ## Pitfalls
 
@@ -86,7 +88,7 @@ claims:
 ## Verification Checklist
 
 - Target content was inspected with `wiki_get`.
-- The update was applied through `wiki_apply`.
+- New source material was captured with `wiki_ingest` when applicable, and the update was applied through `wiki_apply`.
 - Frontmatter uses the correct broad `pageType` and any entity subtype uses `entityType`.
 - Claims have source-backed evidence when possible and non-source/non-report pages list `sourceIds`.
 - `wiki_compile` completed after the authoring change.

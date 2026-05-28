@@ -12,6 +12,7 @@ EXPECTED_SKILLS = {
             "wiki_search",
             "wiki_get",
             "wiki_apply",
+            "wiki_ingest",
             "wiki_compile",
             "wiki_reindex",
             "wiki_lint",
@@ -19,7 +20,7 @@ EXPECTED_SKILLS = {
     },
     "wiki-authoring": {
         "relative_path": Path("skills/wiki-authoring/SKILL.md"),
-        "tools": {"wiki_get", "wiki_apply", "wiki_compile", "wiki_lint"},
+        "tools": {"wiki_get", "wiki_apply", "wiki_ingest", "wiki_compile", "wiki_lint"},
     },
     "wiki-search": {
         "relative_path": Path("skills/wiki-search/SKILL.md"),
@@ -33,6 +34,7 @@ EXPECTED_TOOLS = {
     "wiki_search",
     "wiki_get",
     "wiki_apply",
+    "wiki_ingest",
     "wiki_compile",
     "wiki_reindex",
     "wiki_lint",

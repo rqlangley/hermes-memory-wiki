@@ -14,6 +14,7 @@ EXPECTED_TOOLS = {
     "wiki_search",
     "wiki_get",
     "wiki_apply",
+    "wiki_ingest",
     "wiki_compile",
     "wiki_reindex",
     "wiki_lint",
@@ -70,8 +71,9 @@ def test_schemas_require_fields_where_relevant():
     assert tools["wiki_search"]["schema"]["required"] == ["query"]
     assert tools["wiki_get"]["schema"]["required"] == ["lookup"]
     assert tools["wiki_apply"]["schema"]["required"] == ["op"]
+    assert tools["wiki_ingest"]["schema"]["required"] == ["sourceType"]
 
-    for name in EXPECTED_TOOLS - {"wiki_search", "wiki_get", "wiki_apply"}:
+    for name in EXPECTED_TOOLS - {"wiki_search", "wiki_get", "wiki_apply", "wiki_ingest"}:
         assert "required" not in tools[name]["schema"] or tools[name]["schema"]["required"] == []
 
 
@@ -96,6 +98,19 @@ def test_tool_schemas_are_strict_and_openclaw_compatible():
     assert evidence_schema["additionalProperties"] is False
     assert evidence_schema["properties"]["sourceId"] == {"type": "string"}
     assert evidence_schema["properties"]["lines"] == {"type": "string"}
+
+    ingest_props = tools["wiki_ingest"]["schema"]["properties"]
+    assert ingest_props["sourceType"]["enum"] == ["local-file", "conversation-summary", "text"]
+    assert set(ingest_props) == {
+        "vaultPath",
+        "sourceType",
+        "title",
+        "inputPath",
+        "body",
+        "sessionId",
+        "messageRange",
+        "sourcePath",
+    }
 
 
 def test_wiki_init_handler_returns_text_and_details(tmp_path):
@@ -350,6 +365,86 @@ def test_wiki_apply_handler_normalizes_and_calls_core(monkeypatch, tmp_path):
         "op": "create_synthesis",
         "compile": {"pageCounts": {"synthesis": 1}, "claimCount": 0, "updatedFiles": [], "updatedFileCount": 0},
     }
+
+
+def test_wiki_ingest_local_file_handler_initializes_ingests_and_compiles(monkeypatch, tmp_path):
+    from hermes_memory_wiki import tools
+
+    calls = {}
+    source_file = tmp_path / "source.txt"
+    source_file.write_text("source text", encoding="utf-8")
+
+    def fake_init(config):
+        calls["initialized"] = config.vault_path
+        return SimpleNamespace(root=config.vault_path, created=False, created_directories=[], created_files=[])
+
+    def fake_ingest(config, raw):
+        assert config.vault_path == tmp_path / "vault"
+        calls["raw"] = raw
+        return SimpleNamespace(
+            path="sources/source.md",
+            id="source.source",
+            title="Source",
+            source_type="local-file",
+            bytes=11,
+            created=True,
+            changed=True,
+        )
+
+    def fake_compile(config):
+        calls["compiled"] = config.vault_path
+        return SimpleNamespace(vault_root=config.vault_path, page_counts={"source": 1}, claim_count=0, updated_files=[])
+
+    monkeypatch.setattr(tools, "initialize_vault", fake_init)
+    monkeypatch.setattr(tools, "ingest_source", fake_ingest)
+    monkeypatch.setattr(tools, "compile_vault", fake_compile)
+
+    payload = _payload(
+        _registered_tools()["wiki_ingest"]["handler"](
+            {"vaultPath": str(tmp_path / "vault"), "sourceType": "local-file", "inputPath": str(source_file)}
+        )
+    )
+
+    assert "ingested" in payload["text"].lower()
+    assert calls["initialized"] == tmp_path / "vault"
+    assert calls["compiled"] == tmp_path / "vault"
+    assert calls["raw"]["sourceType"] == "local-file"
+    assert payload["details"] == {
+        "path": "sources/source.md",
+        "id": "source.source",
+        "title": "Source",
+        "sourceType": "local-file",
+        "bytes": 11,
+        "created": True,
+        "changed": True,
+        "compile": {"pageCounts": {"source": 1}, "claimCount": 0, "updatedFiles": [], "updatedFileCount": 0},
+    }
+
+
+def test_wiki_ingest_conversation_handler_writes_source_and_compiles(tmp_path):
+    vault = tmp_path / "vault"
+
+    payload = _payload(
+        _registered_tools()["wiki_ingest"]["handler"](
+            {
+                "vaultPath": str(vault),
+                "sourceType": "conversation-summary",
+                "title": "Decision Chat",
+                "body": "We decided to expose wiki_ingest.",
+                "sessionId": "session-1",
+                "messageRange": "1-4",
+            }
+        )
+    )
+
+    assert payload["details"]["path"] == "sources/decision-chat.md"
+    assert payload["details"]["id"] == "source.decision-chat"
+    assert payload["details"]["sourceType"] == "conversation-summary"
+    assert payload["details"]["created"] is True
+    assert payload["details"]["changed"] is True
+    assert payload["details"]["compile"]["pageCounts"]["source"] == 1
+    assert (vault / "sources" / "decision-chat.md").is_file()
+    assert (vault / ".hermes-wiki" / "cache" / "agent-digest.json").is_file()
 
 
 @pytest.mark.parametrize(
