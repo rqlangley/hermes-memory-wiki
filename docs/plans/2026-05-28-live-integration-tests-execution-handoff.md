@@ -76,7 +76,7 @@ HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPE...EY" .venv/bin/python -m 
 env -u OPENAI_API_KEY -u PYTHONPATH /usr/bin/python3 -S scripts/smoke_live_openai.py
 ```
 
-Result: checkout import/bootstrap regression test passed; opt-in live tool workflow still passed; bare-interpreter no-key CLI check returned JSON with exit code 1 instead of a traceback.
+Result: checkout import/bootstrap regression test passed; explicit `--json` missing-key CLI path returned safe JSON with exit code 1; opt-in live tool workflow still passed; bare-interpreter no-key CLI check returned JSON with exit code 1 instead of a traceback.
 
 ## Environment and Secrets
 
