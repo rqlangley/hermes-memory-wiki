@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 10.1
+**Last updated:** 2026-05-27 after Task 11.1
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists and has been pushed to origin through Task 10.1 after verification, review, and handoff update.
+The feature branch exists and has been pushed to origin through Task 11.1 after verification, review, and handoff update.
 
 Completed commits:
 
@@ -103,6 +103,8 @@ a327cf8 docs: update handoff after install docs
 ed4e9e1 docs: update handoff after development guide
 ea3563e test: add wiki workflow smoke test
 98c38ca fix: keep smoke workflow offline
+2c27f02 docs: update handoff after smoke test
+64f08f4 fix: reject unsafe vector reindex paths
 ```
 
 Completed tasks:
@@ -994,21 +996,49 @@ Review results:
 - Initial code quality: REQUEST_CHANGES; fixed live-provider risk in smoke search when using an existing vector-indexed vault.
 - Code quality after fix: APPROVED.
 
+### Task 11.1 — Spec compliance review
+
+Files:
+
+- `src/hermes_memory_wiki/vector_index.py`
+- `tests/test_reindex.py`
+
+Review checklist result:
+
+- No OpenClaw runtime dependency: PASS.
+- No bridge-mode implementation: PASS.
+- Default vault path is `~/.hermes/wiki/main`: PASS.
+- Toolset is `memory_wiki`: PASS.
+- Tools include all required v1 tools: PASS.
+- Keyword search works without API key: PASS.
+- Vector search uses OpenAI embeddings when configured: PASS.
+- Hybrid search degrades cleanly: PASS.
+- Skills are registered and accurate: PASS.
+- Writes are restricted to configured vault root: initial FAIL, fixed.
+- Tests pass offline: PASS.
+
+Fix implemented:
+
+- `reindex_vault(...)` now rejects unsafe symlinked vector-index paths before constructing `VectorIndex` or calling the embedding provider.
+- Added regression test for symlinked `.hermes-wiki/vector` directory ensuring no outside `index.sqlite` write and no provider embed calls.
+
+Review results:
+
+- Initial Task 11.1 spec compliance: FAIL; fixed `wiki_reindex` outside-vault write through symlinked vector directory.
+- Spec compliance after fix: PASS.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 10.1:
+Latest verification after Task 11.1:
 
 ```bash
-.venv/bin/python -m pytest tests/test_smoke_workflow.py -q
-# 2 passed
-
-.venv/bin/python -m pytest tests/test_smoke_workflow.py tests/test_tools.py tests/test_reindex.py tests/test_hybrid_search.py -q
-# 27 passed
+.venv/bin/python -m pytest tests/test_reindex.py -q
+# 9 passed
 
 .venv/bin/python -m pytest -q
-# 194 passed
+# 195 passed
 
 .venv/bin/python -m compileall src tests
 # passed
@@ -1064,33 +1094,28 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 11.1 — Spec compliance review** from the implementation plan.
+Continue with **Task 11.2 — Code quality review** from the implementation plan.
 
-Objective: verify implementation matches the approved design.
+Objective: review maintainability, security, test coverage, and ergonomics.
 
 Checklist:
 
-- [ ] No OpenClaw runtime dependency.
-- [ ] No bridge-mode implementation.
-- [ ] Default vault path is `~/.hermes/wiki/main`.
-- [ ] Toolset is `memory_wiki`.
-- [ ] Tools include all required v1 tools.
-- [ ] Keyword search works without API key.
-- [ ] Vector search uses OpenAI embeddings when configured.
-- [ ] Hybrid search degrades cleanly.
-- [ ] Skills are registered and accurate.
-- [ ] Writes are restricted to configured vault root.
-- [ ] Tests pass offline.
-
-Use a reviewer subagent via `requesting-code-review`/`subagent-driven-development`.
+- [ ] Clear module boundaries.
+- [ ] Small functions.
+- [ ] No leaked API keys.
+- [ ] No broad exception swallowing that hides user-facing errors.
+- [ ] SQLite connections handled safely.
+- [ ] Deterministic tests.
+- [ ] No network access in default tests.
+- [ ] Helpful diagnostics.
 
 Expected outcome:
 
-- PASS with evidence, or specific gaps to fix before Task 11.2.
+- APPROVED with evidence, or specific blocking issues to fix before Task 11.3.
 
 Implementation note:
 
-- This is a review task, not a feature task. Do not add code unless the review finds valid blocking gaps and a scoped fix is needed.
+- This is a review task. Do not add code unless the review finds valid blocking issues and a scoped fix is needed.
 
 ## Required workflow
 
