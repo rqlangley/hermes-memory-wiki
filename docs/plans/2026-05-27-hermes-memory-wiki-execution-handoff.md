@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 11.3
+**Last updated:** 2026-05-27 after Task 11.4
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists and has been pushed to origin through Task 11.3 after verification, review, and handoff update.
+The feature branch has been pushed to origin through Task 11.4, and the initial implementation pull request is open: https://github.com/rqlangley/hermes-memory-wiki/pull/1
 
 Completed commits:
 
@@ -107,6 +107,8 @@ ea3563e test: add wiki workflow smoke test
 64f08f4 fix: reject unsafe vector reindex paths
 bc03d9b docs: update handoff after spec review
 46aa784 docs: update handoff after quality review
+b16c2b4 docs: update handoff after final verification
+29eb3f6 docs: add pull request body
 ```
 
 Completed tasks:
@@ -1052,6 +1054,27 @@ Final non-live verification completed with `.venv/bin/python` on this host.
 
 Live OpenAI tests were not run because there is currently no `tests/live/` suite and live tests require explicit user approval plus an API key.
 
+### Task 11.4 — Push and PR
+
+Files:
+
+- `docs/pr-body.md`
+
+Implemented:
+
+- Added PR body summarizing implementation, verification, and notes.
+- Pushed `feat/initial-hermes-memory-wiki-plugin` to origin.
+- Opened pull request: https://github.com/rqlangley/hermes-memory-wiki/pull/1
+
+PR status at creation:
+
+- State: OPEN.
+- Base: `main`.
+- Head: `feat/initial-hermes-memory-wiki-plugin`.
+- Draft: false.
+- Mergeable: MERGEABLE.
+- Status checks: none reported by GitHub at creation time.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
@@ -1129,22 +1152,15 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 11.4 — Push and PR** from the implementation plan.
+The approved initial implementation plan is complete through Task 11.4.
 
-Planned commands:
+Open PR:
 
-```bash
-git status --short
-git push -u origin feat/initial-hermes-memory-wiki-plugin
-gh pr create --title "Build initial Hermes memory wiki plugin" --body-file docs/pr-body.md
+```text
+https://github.com/rqlangley/hermes-memory-wiki/pull/1
 ```
 
-Current notes:
-
-- Branch is already pushed and tracking `origin/feat/initial-hermes-memory-wiki-plugin` through Task 11.3.
-- `docs/pr-body.md` does not yet exist; create a concise PR body or use `gh pr create --fill` if appropriate.
-- Do not merge to `main` until review/verification passes.
-- If a PR already exists, report its URL rather than creating a duplicate.
+Do not merge to `main` until any requested GitHub review/CI requirements pass.
 
 ## Required workflow
 
