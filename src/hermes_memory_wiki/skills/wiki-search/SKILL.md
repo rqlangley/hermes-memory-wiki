@@ -14,23 +14,24 @@ metadata:
 
 ## Overview
 
-Search the Hermes memory wiki with a read-first workflow. Start by checking vault status when needed, search for relevant pages, retrieve exact page content, and refresh indexes if results appear stale.
+Search the Hermes memory wiki with a read-first workflow. Use this skill when the answer may depend on stored wiki knowledge, prior project memory, source-backed claims, or compiled wiki indexes.
 
 ## When to Use
 
-- The user asks about stored wiki knowledge or prior project memory.
-- You need to locate entities, claims, topics, or syntheses before taking action.
-- Search returns too few results and the vault may need an index refresh.
-- You must cite exact wiki page content rather than relying on snippets.
+- The user asks about stored wiki knowledge, prior work, project memory, entities, concepts, sources, reports, or syntheses.
+- You need to locate source-backed claims or exact claim IDs before answering.
+- You need a page path to cite or to feed into an authoring/maintenance workflow.
+- Search returns too few results and recent edits may not be indexed yet.
 
 ## Search Workflow
 
 1. Run `wiki_status` if the vault path, page count, or readiness is uncertain.
-2. Use `wiki_search` with a concise query and an appropriate result limit.
-3. Open promising results with `wiki_get` to inspect authoritative page content.
-4. Refine the query with names, titles, or keywords from retrieved pages when needed.
-5. If search appears stale after recent edits, run `wiki_reindex`, then repeat `wiki_search`.
-6. Base answers on retrieved content, and mention uncertainty when pages are incomplete.
+2. Search first with `wiki_search` using a concise query and appropriate result limit.
+3. Open promising results with `wiki_get`; snippets are discovery hints, not the authoritative page.
+4. Cite wiki page paths and claim IDs when they support an answer, for example `entities/ada.md` or `claim.ada.role`.
+5. Refine with names, aliases, page paths, source IDs, or claim terms from retrieved pages when needed.
+6. If freshness matters after recent edits or a compiled index looks stale, run `wiki_reindex`, then repeat `wiki_search`.
+7. Base answers on retrieved content and state uncertainty when pages, evidence, or claims are incomplete.
 
 ## Pitfalls
 
@@ -43,5 +44,6 @@ Search the Hermes memory wiki with a read-first workflow. Start by checking vaul
 
 - `wiki_status` was used when vault readiness was unclear.
 - Relevant records were discovered with `wiki_search`.
-- Final claims were checked against full content from `wiki_get`.
-- `wiki_reindex` was used only when index freshness was a plausible issue.
+- Exact page content was checked with `wiki_get` before making final claims.
+- Page paths and claim IDs were cited when relevant.
+- `wiki_reindex` was used only when search freshness was a plausible issue.

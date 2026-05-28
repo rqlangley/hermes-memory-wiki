@@ -160,6 +160,8 @@ Native-skill installation is recommended because current Hermes skill-listing/di
 
 ## 6. Initialize the vault
 
+The initialized vault uses the OpenClaw-compatible schema described in [Schema](schema.md): queryable pages live under `entities/`, `concepts/`, `syntheses/`, `sources/`, and `reports/`; `pageType` must match the directory-derived broad kind; entity subtypes such as people use `entityType`.
+
 The default vault path is:
 
 ```text
