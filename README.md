@@ -41,8 +41,6 @@ mkdir -p ~/.hermes/skills/memory-wiki
 cp -a src/hermes_memory_wiki/skills/wiki-* ~/.hermes/skills/memory-wiki/
 ```
 
-This repository does not include a `.venv/` directory. A project-local virtual environment is only a development convenience; see the installation guide for environment choices.
-
 Enable the plugin in Hermes config:
 
 ```yaml
