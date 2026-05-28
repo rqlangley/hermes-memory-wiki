@@ -22,7 +22,7 @@ Build and verify opt-in live OpenAI and pre-install plugin integration tests for
 - [x] Task 1: live pytest gating implemented in `tests/conftest.py` and `pyproject.toml`.
 - [x] Task 2: live OpenAI embedding provider tests implemented in `tests/live/test_openai_embeddings.py`.
 - [x] Task 3: live vector reindex/search tests implemented in `tests/live/test_live_reindex_search.py`.
-- [ ] Task 4: reusable live plugin tool smoke script/tests.
+- [x] Task 4: reusable live plugin tool smoke script/tests implemented in `scripts/smoke_live_openai.py` and `tests/live/test_live_tool_workflow.py`.
 - [ ] Task 5: pre-install plugin layout simulation tests.
 - [ ] Task 6: negative-path/stale-index coverage.
 - [ ] Task 7: final verification/docs refresh.
@@ -51,11 +51,22 @@ Task 3 verification on 2026-05-28:
 
 ```bash
 .venv/bin/python -m pytest tests/live/test_live_reindex_search.py -q
-HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPE...EY" .venv/bin/python -m pytest tests/live/test_live_reindex_search.py -q
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY=*** .venv/bin/python -m pytest tests/live/test_live_reindex_search.py -q
 .venv/bin/python -m pytest -q
 ```
 
 Result: default live module run skipped 2 tests; opt-in live run passed 2 tests; full default suite passed with 195 passed and 4 skipped.
+
+Task 4 verification on 2026-05-28:
+
+```bash
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY=*** .venv/bin/python -m pytest tests/live/test_live_tool_workflow.py -q
+OPENAI_API_KEY=*** .venv/bin/python scripts/smoke_live_openai.py
+.venv/bin/python -m pytest tests/live/test_live_tool_workflow.py -q
+.venv/bin/python -m pytest -q
+```
+
+Result: opt-in live tool workflow passed 1 test; script returned an OK JSON summary with OpenAI reindex details; default tool workflow test skipped 1 test; full default suite passed with 195 passed and 5 skipped.
 
 ## Environment and Secrets
 
@@ -99,7 +110,7 @@ OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python scripts/smoke_live_openai.py
 
 ## Next Action
 
-Start Task 4 from the implementation plan: add a reusable live plugin tool smoke script plus `tests/live/test_live_tool_workflow.py`.
+Start Task 5 from the implementation plan: strengthen pre-install plugin layout simulation tests without mutating the real Hermes profile.
 
 ## Paste-Into-New-Chat Prompt
 

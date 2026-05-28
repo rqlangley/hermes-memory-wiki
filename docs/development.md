@@ -94,9 +94,11 @@ Current live-testing implementation status:
 - 2026-05-28: pytest marker/gating infrastructure added in `tests/conftest.py` and `pyproject.toml`.
 - 2026-05-28: live OpenAI embedding provider contract tests added in `tests/live/test_openai_embeddings.py`.
 - 2026-05-28: live vector reindex/hybrid search tests added in `tests/live/test_live_reindex_search.py` using temporary synthetic vaults.
+- 2026-05-28: reusable live plugin tool smoke workflow added in `scripts/smoke_live_openai.py` with coverage in `tests/live/test_live_tool_workflow.py`.
 - 2026-05-28 verification: `.venv/bin/python -m pytest --markers | grep live_openai` shows the marker; `.venv/bin/python -m pytest -q` passed with 195 tests.
 - 2026-05-28 live verification: default `tests/live/test_openai_embeddings.py` run skipped 2 tests; opt-in live run passed 2 tests.
 - 2026-05-28 live verification: default `tests/live/test_live_reindex_search.py` run skipped 2 tests; opt-in live run passed 2 tests; full default suite passed with 195 passed and 4 skipped.
+- 2026-05-28 live verification: `tests/live/test_live_tool_workflow.py` opt-in run passed 1 test; `scripts/smoke_live_openai.py` produced an OK JSON summary with OpenAI embeddings; full default suite passed with 195 passed and 5 skipped.
 
 ## Source-reference notes
 

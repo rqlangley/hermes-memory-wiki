@@ -65,7 +65,7 @@ Run the default offline suite without network/API calls:
 .venv/bin/python -m pytest -q
 ```
 
-Live OpenAI tests are opt-in and marked `live_openai`; they are skipped unless `HERMES_MEMORY_WIKI_LIVE_OPENAI=1` and `OPENAI_API_KEY` are set. Current live modules validate the real OpenAI embedding provider contract and live vector reindex/hybrid search on temporary synthetic vaults. See [Development](docs/development.md) for the current live-test commands and status.
+Live OpenAI tests are opt-in and marked `live_openai`; they are skipped unless `HERMES_MEMORY_WIKI_LIVE_OPENAI=1` and `OPENAI_API_KEY` are set. Current live modules validate the real OpenAI embedding provider contract, live vector reindex/hybrid search on temporary synthetic vaults, and the actual plugin tool workflow. For a manual pre-install smoke, run `scripts/smoke_live_openai.py` with `OPENAI_API_KEY` set. See [Development](docs/development.md) for the current live-test commands and status.
 
 ## Goals
 
