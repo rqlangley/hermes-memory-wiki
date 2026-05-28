@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 8.3
+**Last updated:** 2026-05-27 after Task 9.1
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists and has been pushed to origin through Task 8.3 after verification, review, and handoff update.
+The feature branch exists and has been pushed to origin through Task 9.1 after verification, review, and handoff update.
 
 Completed commits:
 
@@ -94,6 +94,9 @@ d5160bf feat: update wiki page metadata
 e1fe2ee feat: add hermes user plugin layout
 678f8ab docs: update handoff after plugin layout
 559b413 feat: add memory wiki skills
+5d2991c docs: update handoff after wiki skills
+5c487ff docs: add installation and configuration guide
+56f4b83 docs: clarify memory wiki config limitations
 ```
 
 Completed tasks:
@@ -899,30 +902,54 @@ Review results:
 - Spec compliance: PASS.
 - Code quality: APPROVED.
 
+### Task 9.1 — Document installation and configuration
+
+Files:
+
+- `README.md`
+- `docs/installation.md`
+- `docs/configuration.md`
+
+Implemented:
+
+- README quick start, tool list, and links to installation/configuration docs.
+- Installation guide covering editable pip install, user-plugin symlink/copy install, plugin enablement, toolset enablement, `OPENAI_API_KEY`, vault initialization, and first reindex.
+- Configuration guide covering active Hermes plugin/toolset settings, supported per-call `vaultPath`, current user-plugin config limitations, Python library/default config shape, practical no-embeddings workflow, and available tools.
+
+Covered behavior:
+
+- documents install without modifying Hermes core;
+- documents user-plugin layout under `~/.hermes/plugins/memory-wiki`;
+- documents enabling `plugins.enabled: [memory-wiki]` and the `memory_wiki` toolset;
+- documents setting `OPENAI_API_KEY` for vector indexing/search;
+- documents how to avoid embeddings with current user-plugin handlers;
+- documents `wiki_init` and first `wiki_reindex` workflow;
+- documents that current user-plugin handlers do not automatically read `memory_wiki.*` Hermes config keys, avoiding unsupported runtime config claims.
+
+Review results:
+
+- Initial spec compliance: FAIL; fixed unsupported claims that `memory_wiki.*` Hermes config keys directly control current user-plugin runtime behavior.
+- Spec compliance after fix: PASS.
+- Code quality after fix: APPROVED.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 8.3:
+Latest verification after Task 9.1:
 
 ```bash
-.venv/bin/python -m pytest tests/test_skills.py -q
-# 4 passed
+.venv/bin/python -m pip install -e .
+# passed
 
-.venv/bin/python -m pytest tests/test_skills.py tests/test_tools.py -q
-# 14 passed
+.venv/bin/python -c 'import hermes_memory_wiki; print(hermes_memory_wiki.__version__)'
+# 0.1.0
 
 .venv/bin/python -m pytest -q
 # 192 passed
 
 .venv/bin/python -m compileall src tests
 # passed
-
-.venv/bin/python -m pip install -e .
-# passed
-
-.venv/bin/python -c 'import hermes_memory_wiki; print(hermes_memory_wiki.__version__)'
-# 0.1.0
 ```
 
 ## Approved design summary
@@ -972,34 +999,25 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 9.1 — Document installation and configuration** from the implementation plan.
+Continue with **Task 9.2 — Add development guide** from the implementation plan.
 
 Files:
 
-- modify `README.md`
-- create `docs/installation.md`
-- create `docs/configuration.md`
+- create `docs/development.md`
 
 Required documentation coverage:
 
-- pip editable install;
-- user-plugin copy/symlink install;
-- enabling plugin in Hermes config;
-- enabling `memory_wiki` toolset;
-- setting `OPENAI_API_KEY`;
-- disabling embeddings;
-- initializing vault;
-- running first reindex.
-
-Verification notes:
-
-- verify docs commands are plausible with non-destructive commands only;
-- use `.venv/bin/python` instead of bare `python` on this host when running verification.
+- TDD expectations;
+- test commands;
+- live OpenAI tests opt-in;
+- source-reference notes;
+- privacy/security notes;
+- release checklist.
 
 Expected commit message:
 
 ```text
-docs: add installation and configuration guide
+docs: add development workflow
 ```
 
 ## Required workflow
