@@ -127,7 +127,7 @@ Expected: skipped.
 With opt-in/key:
 
 ```bash
-set -a; . /home/langley/.hermes/.env; set +a; HERMES_MEMORY_WIKI_LIVE_OPENAI=1 .venv/bin/python -m pytest tests/live/test_openai_embeddings.py -q
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live/test_openai_embeddings.py -q
 ```
 
 Expected after test creation and existing implementation: should pass if provider works; if it fails, fix only test harness/config issues unless production bug is found.
@@ -164,7 +164,7 @@ Add live tests marked `live_openai`:
 **Step 2: Run targeted live test**
 
 ```bash
-set -a; . /home/langley/.hermes/.env; set +a; HERMES_MEMORY_WIKI_LIVE_OPENAI=1 .venv/bin/python -m pytest tests/live/test_live_reindex_search.py -q
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live/test_live_reindex_search.py -q
 ```
 
 Expected: passes and uses only `tmp_path` data.
@@ -210,7 +210,7 @@ Test expectations:
 **Step 2: Run RED**
 
 ```bash
-set -a; . /home/langley/.hermes/.env; set +a; HERMES_MEMORY_WIKI_LIVE_OPENAI=1 .venv/bin/python -m pytest tests/live/test_live_tool_workflow.py -q
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live/test_live_tool_workflow.py -q
 ```
 
 Expected: fails because script/function does not exist.
@@ -229,8 +229,8 @@ Implement a JSON-safe script with:
 **Step 4: Run GREEN and manual CLI smoke**
 
 ```bash
-set -a; . /home/langley/.hermes/.env; set +a; HERMES_MEMORY_WIKI_LIVE_OPENAI=1 .venv/bin/python -m pytest tests/live/test_live_tool_workflow.py -q
-set -a; . /home/langley/.hermes/.env; set +a; .venv/bin/python scripts/smoke_live_openai.py
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live/test_live_tool_workflow.py -q
+OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python scripts/smoke_live_openai.py
 ```
 
 Expected: both pass, script outputs JSON summary.
@@ -343,8 +343,8 @@ Expected: compile passes; offline tests pass with live tests skipped.
 **Step 2: Run full live verification**
 
 ```bash
-set -a; . /home/langley/.hermes/.env; set +a; HERMES_MEMORY_WIKI_LIVE_OPENAI=1 .venv/bin/python -m pytest tests/live -q
-set -a; . /home/langley/.hermes/.env; set +a; .venv/bin/python scripts/smoke_live_openai.py
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live -q
+OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python scripts/smoke_live_openai.py
 ```
 
 Expected: all live tests pass using temporary vaults and synthetic content.
