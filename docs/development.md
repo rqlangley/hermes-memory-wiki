@@ -59,9 +59,9 @@ Optionally verify the installed/importable package version:
 
 ## Live OpenAI tests
 
-Live OpenAI tests are opt-in only. Do not run them by default in local verification, CI, or delegated tasks unless explicitly allowed and an API key is configured.
+This repository currently has no `tests/live/` suite. Live OpenAI tests are opt-in only if such a suite is added in the future. Do not run them by default in local verification, CI, or delegated tasks unless explicitly allowed, an API key is configured, and the live test directory exists.
 
-When live tests are explicitly allowed, run:
+If live tests are added and explicitly allowed, run:
 
 ```bash
 HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live -v
@@ -123,12 +123,12 @@ The memory wiki may store user-maintained notes, generated indexes, search metad
    .venv/bin/python -c 'import hermes_memory_wiki; print(hermes_memory_wiki.__version__)'
    ```
 
-7. Inspect the diff and commit only the intended files:
+7. Inspect the diff and commit only the files intended for the assigned task:
 
    ```bash
-   git diff -- docs/development.md
-   git add docs/development.md
-   git commit -m "docs: add development workflow"
+   git diff -- <intended-files>
+   git add <intended-files>
+   git commit -m "<type>: <concise description>"
    ```
 
 Use precise commit messages and do not bundle unrelated code, documentation, generated artifacts, or environment changes.
