@@ -12,9 +12,22 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Mapping
+
+
+def _bootstrap_checkout_imports() -> None:
+    """Allow running this script directly from a source checkout."""
+
+    repo_root = Path(__file__).resolve().parents[1]
+    src_path = repo_root / "src"
+    if src_path.is_dir():
+        sys.path.insert(0, str(src_path))
+
+
+_bootstrap_checkout_imports()
 
 from hermes_memory_wiki import plugin
 

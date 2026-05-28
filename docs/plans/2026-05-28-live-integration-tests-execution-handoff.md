@@ -42,7 +42,7 @@ Task 2 verification on 2026-05-28:
 
 ```bash
 .venv/bin/python -m pytest tests/live/test_openai_embeddings.py -q
-HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPE...EY" .venv/bin/python -m pytest tests/live/test_openai_embeddings.py -q
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live/test_openai_embeddings.py -q
 ```
 
 Result: default run skipped 2 live tests; opt-in live run passed 2 tests.
@@ -51,7 +51,7 @@ Task 3 verification on 2026-05-28:
 
 ```bash
 .venv/bin/python -m pytest tests/live/test_live_reindex_search.py -q
-HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY=*** .venv/bin/python -m pytest tests/live/test_live_reindex_search.py -q
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live/test_live_reindex_search.py -q
 .venv/bin/python -m pytest -q
 ```
 
@@ -60,13 +60,22 @@ Result: default live module run skipped 2 tests; opt-in live run passed 2 tests;
 Task 4 verification on 2026-05-28:
 
 ```bash
-HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY=*** .venv/bin/python -m pytest tests/live/test_live_tool_workflow.py -q
-OPENAI_API_KEY=*** .venv/bin/python scripts/smoke_live_openai.py
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live/test_live_tool_workflow.py -q
+OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python scripts/smoke_live_openai.py
 .venv/bin/python -m pytest tests/live/test_live_tool_workflow.py -q
 .venv/bin/python -m pytest -q
 ```
 
 Result: opt-in live tool workflow passed 1 test; script returned an OK JSON summary with OpenAI reindex details; default tool workflow test skipped 1 test; full default suite passed with 195 passed and 5 skipped.
+
+Task 4 review-fix verification on 2026-05-28:
+
+```bash
+.venv/bin/python -m pytest tests/test_smoke_live_openai_script.py -q
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live/test_live_tool_workflow.py -q
+```
+
+Result: checkout import/bootstrap regression test passed; opt-in live tool workflow still passed.
 
 ## Environment and Secrets
 
