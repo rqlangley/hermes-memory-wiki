@@ -102,6 +102,10 @@ Live OpenAI tests are opt-in and marked `live_openai`; they are skipped unless `
 - No migration of the existing OpenClaw wiki vault.
 - No dependency on OpenClaw at runtime.
 
+## License
+
+This project is released under the [MIT License](LICENSE). You may use, modify, distribute, and fork it, provided the copyright notice and license text are preserved.
+
 ## Planning artifacts
 
 - [`docs/plans/2026-05-27-hermes-memory-wiki-design.md`](docs/plans/2026-05-27-hermes-memory-wiki-design.md)
