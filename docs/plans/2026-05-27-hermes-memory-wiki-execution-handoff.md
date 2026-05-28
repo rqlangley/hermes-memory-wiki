@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 11.1
+**Last updated:** 2026-05-27 after Task 11.2
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists and has been pushed to origin through Task 11.1 after verification, review, and handoff update.
+The feature branch exists and has been pushed to origin through Task 11.2 after verification, review, and handoff update.
 
 Completed commits:
 
@@ -105,6 +105,7 @@ ea3563e test: add wiki workflow smoke test
 98c38ca fix: keep smoke workflow offline
 2c27f02 docs: update handoff after smoke test
 64f08f4 fix: reject unsafe vector reindex paths
+bc03d9b docs: update handoff after spec review
 ```
 
 Completed tasks:
@@ -1027,16 +1028,30 @@ Review results:
 - Initial Task 11.1 spec compliance: FAIL; fixed `wiki_reindex` outside-vault write through symlinked vector directory.
 - Spec compliance after fix: PASS.
 
+### Task 11.2 — Code quality review
+
+Review checklist result:
+
+- Clear module boundaries: APPROVED.
+- Small functions: APPROVED, with non-blocking note that `vector_index.py` is large and may merit future splitting.
+- No leaked API keys: APPROVED; secret-pattern scan found no matches.
+- No broad exception swallowing that hides user-facing errors: APPROVED; broad catches return diagnostics where used.
+- SQLite connections handled safely: APPROVED.
+- Deterministic tests: APPROVED.
+- No network access in default tests: APPROVED.
+- Helpful diagnostics: APPROVED, with non-blocking note that provider-failure `deleted_count` reports planned deletions even when DB is not mutated.
+
+Review results:
+
+- Code quality: APPROVED.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 11.1:
+Latest verification after Task 11.2:
 
 ```bash
-.venv/bin/python -m pytest tests/test_reindex.py -q
-# 9 passed
-
 .venv/bin/python -m pytest -q
 # 195 passed
 
@@ -1045,6 +1060,13 @@ Latest verification after Task 11.1:
 
 .venv/bin/python -c 'import hermes_memory_wiki; print(hermes_memory_wiki.__version__)'
 # 0.1.0
+```
+
+Additional quality-review scan:
+
+```bash
+git grep -n -I -E '(sk-[A-Za-z0-9_-]{20,}|BEGIN (RSA|DSA|EC|OPENSSH|PRIVATE) KEY|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,})' -- . ':!*.pyc' ':!.pytest_cache' ':!.venv'
+# no matches
 ```
 
 ## Approved design summary
@@ -1094,28 +1116,31 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 11.2 — Code quality review** from the implementation plan.
+Continue with **Task 11.3 — Final verification** from the implementation plan.
 
-Objective: review maintainability, security, test coverage, and ergonomics.
+Run with `.venv/bin/python` on this host:
 
-Checklist:
+```bash
+.venv/bin/python -m pytest -q
+.venv/bin/python -m compileall src tests
+.venv/bin/python -m pip install -e .
+.venv/bin/python -c 'import hermes_memory_wiki; print(hermes_memory_wiki.__version__)'
+git status --short --branch
+```
 
-- [ ] Clear module boundaries.
-- [ ] Small functions.
-- [ ] No leaked API keys.
-- [ ] No broad exception swallowing that hides user-facing errors.
-- [ ] SQLite connections handled safely.
-- [ ] Deterministic tests.
-- [ ] No network access in default tests.
-- [ ] Helpful diagnostics.
+If live test is explicitly allowed and `OPENAI_API_KEY` is available, the planned live command is:
+
+```bash
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live -v
+```
+
+Current repo note: no `tests/live/` suite exists as of Task 9.2; do not run live tests unless such a suite exists and the user explicitly allows it.
 
 Expected outcome:
 
-- APPROVED with evidence, or specific blocking issues to fix before Task 11.3.
-
-Implementation note:
-
-- This is a review task. Do not add code unless the review finds valid blocking issues and a scoped fix is needed.
+- all non-live verification passes;
+- update handoff with final verification evidence;
+- proceed to Task 11.4 push/PR only after verification passes.
 
 ## Required workflow
 
