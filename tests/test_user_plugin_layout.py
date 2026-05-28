@@ -175,6 +175,16 @@ def test_register_exposes_expected_tool_and_skill_declarations() -> None:
         assert Path(entry["path"]).is_file()
 
 
+def test_registered_handlers_accept_hermes_runtime_kwargs(tmp_path: Path) -> None:
+    ctx = FakeContext()
+    package_register(ctx)
+
+    result = ctx.tools["wiki_init"]["handler"]({"vaultPath": str(tmp_path / "wiki")}, task_id="task-123")
+
+    assert "Initialized memory wiki vault" in result
+    assert str(tmp_path / "wiki") in result
+
+
 def test_registered_tool_schemas_use_external_field_names_and_casing() -> None:
     ctx = FakeContext()
 

@@ -18,6 +18,7 @@ TOOLSET = "memory_wiki"
 
 JsonDict = dict[str, Any]
 Handler = Callable[[Mapping[str, Any] | None], str]
+HermesHandler = Callable[..., str]
 
 
 def register(ctx: Any) -> None:
@@ -98,8 +99,15 @@ def _spec(name: str, description: str, schema: JsonDict, handler: Handler) -> Js
         "toolset": TOOLSET,
         "description": description,
         "schema": schema,
-        "handler": handler,
+        "handler": _accept_runtime_kwargs(handler),
     }
+
+
+def _accept_runtime_kwargs(handler: Handler) -> HermesHandler:
+    def wrapped(args: Mapping[str, Any] | None = None, **_kwargs: Any) -> str:
+        return handler(args)
+
+    return wrapped
 
 
 def _schema(properties: JsonDict, *, required: list[str] | None = None) -> JsonDict:
