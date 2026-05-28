@@ -258,6 +258,122 @@ def test_create_synthesis_preserves_human_notes_on_update(tmp_path):
     assert doc.frontmatter["status"] == "published"
 
 
+def _entity_raw(**overrides):
+    raw = {
+        "op": "upsert_entity",
+        "title": "Alice Example",
+        "entityType": "person",
+        "aliases": ["Ally", " A. Example "],
+        "body": "Alice maintains the memory wiki.",
+        "sourceIds": ["source.chat-1"],
+        "claims": [{"text": "Alice owns the wiki rollout.", "status": "supported"}],
+        "status": "draft",
+        "confidence": 0.8,
+    }
+    raw.update(overrides)
+    return raw
+
+
+@pytest.mark.parametrize("missing", ["title", "body", "sourceIds", "entityType"])
+def test_normalize_upsert_entity_requires_title_body_source_ids_and_entity_type(missing):
+    raw = _entity_raw()
+    raw.pop(missing)
+
+    with pytest.raises(ValueError, match=missing):
+        normalize_mutation(raw)
+
+
+def test_upsert_entity_writes_deterministic_entities_path_default_id_and_frontmatter(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+
+    result = apply_mutation(config, normalize_mutation(_entity_raw()))
+
+    assert result.created is True
+    assert result.path == "entities/alice-example.md"
+    assert result.id == "entity.alice-example"
+    doc = parse_wiki_markdown((config.vault_path / result.path).read_text(encoding="utf-8"))
+    assert doc.frontmatter["id"] == "entity.alice-example"
+    assert doc.frontmatter["title"] == "Alice Example"
+    assert doc.frontmatter["pageType"] == "entity"
+    assert doc.frontmatter["entityType"] == "person"
+    assert doc.frontmatter["sourceIds"] == ["source.chat-1"]
+    assert doc.frontmatter["claims"] == [{"text": "Alice owns the wiki rollout.", "status": "supported"}]
+    assert doc.frontmatter["aliases"] == ["Ally", "A. Example"]
+    assert doc.frontmatter["status"] == "draft"
+    assert doc.frontmatter["confidence"] == 0.8
+    assert re.match(r"^\d{4}-\d{2}-\d{2}T", doc.frontmatter["updatedAt"])
+
+
+def test_upsert_entity_writes_generated_summary_and_human_notes_blocks(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+
+    result = apply_mutation(config, normalize_mutation(_entity_raw()))
+
+    body = parse_wiki_markdown((config.vault_path / result.path).read_text(encoding="utf-8")).body
+    assert body.startswith("# Alice Example\n")
+    assert HERMES_GENERATED_START in body
+    assert "## Summary" in body
+    assert "Alice maintains the memory wiki." in body
+    assert HERMES_GENERATED_END in body
+    assert f"{HERMES_HUMAN_START}\n## Human Notes\n\n{HERMES_HUMAN_END}" in body
+
+
+def test_upsert_entity_refresh_preserves_existing_id_and_human_notes(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    first = apply_mutation(config, normalize_mutation(_entity_raw()))
+    page_path = config.vault_path / first.path
+    text = page_path.read_text(encoding="utf-8").replace("id: entity.alice-example", "id: entity.alice-existing")
+    text = text.replace(
+        f"{HERMES_HUMAN_START}\n## Human Notes\n\n{HERMES_HUMAN_END}",
+        f"{HERMES_HUMAN_START}\n## Human Notes\n\nKeep entity note.\n{HERMES_HUMAN_END}",
+    )
+    page_path.write_text(text, encoding="utf-8")
+
+    result = apply_mutation(config, normalize_mutation(_entity_raw(body="Updated entity summary.")))
+
+    assert result.created is False
+    assert result.path == first.path
+    assert result.id == "entity.alice-existing"
+    doc = parse_wiki_markdown(page_path.read_text(encoding="utf-8"))
+    assert doc.frontmatter["id"] == "entity.alice-existing"
+    assert "Updated entity summary." in doc.body
+    assert "Keep entity note." in doc.body
+
+
+def test_upsert_entity_lookup_updates_existing_entity_and_preserves_path_and_id(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    page_path = config.vault_path / "entities" / "manual-alice.md"
+    page_path.write_text(
+        "---\nid: entity.manual-alice\ntitle: Alice Manual\npageType: entity\nentityType: person\n---\n# Alice Manual\n\n"
+        f"{HERMES_HUMAN_START}\n## Human Notes\n\nManual note.\n{HERMES_HUMAN_END}\n",
+        encoding="utf-8",
+    )
+
+    result = apply_mutation(config, normalize_mutation(_entity_raw(lookup="entity.manual-alice", title="Alice Renamed")))
+
+    assert result.created is False
+    assert result.path == "entities/manual-alice.md"
+    assert result.id == "entity.manual-alice"
+    doc = parse_wiki_markdown(page_path.read_text(encoding="utf-8"))
+    assert doc.frontmatter["id"] == "entity.manual-alice"
+    assert doc.frontmatter["title"] == "Alice Renamed"
+    assert "Manual note." in doc.body
+
+
+def test_upsert_entity_lookup_refuses_wrong_broad_page_type(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    synthesis = apply_mutation(config, normalize_mutation(_base_raw()))
+
+    with pytest.raises(ValueError, match="pageType.*entity"):
+        apply_mutation(config, normalize_mutation(_entity_raw(lookup=synthesis.id)))
+
+
+
 def _update_raw(**overrides):
     raw = {
         "op": "update_metadata",
