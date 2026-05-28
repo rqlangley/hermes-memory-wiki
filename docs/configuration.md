@@ -41,6 +41,28 @@ hermes tools
 
 Start a fresh session after changing enabled toolsets.
 
+## Load the bundled skills
+
+`hermes-memory-wiki` registers its workflow skills as plugin-bundled skills. Hermes exposes those skills with the plugin namespace, not as flat top-level skills, so use the qualified names:
+
+- `memory-wiki:wiki-maintainer`
+- `memory-wiki:wiki-authoring`
+- `memory-wiki:wiki-search`
+
+For example:
+
+```text
+/skill memory-wiki:wiki-search
+```
+
+or from an agent/tool context:
+
+```text
+skill_view(name="memory-wiki:wiki-search")
+```
+
+Bare names such as `wiki-search` may not resolve unless the skills have also been separately copied into `~/.hermes/skills`. That separate copy is not required for normal plugin usage.
+
 ## Current user-plugin runtime configuration
 
 Supported today in Hermes sessions:
