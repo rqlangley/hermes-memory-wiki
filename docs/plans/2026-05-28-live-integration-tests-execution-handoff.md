@@ -21,7 +21,7 @@ Build and verify opt-in live OpenAI and pre-install plugin integration tests for
 - [x] Plan created and committed in `439ffb2 docs: plan live integration tests`.
 - [x] Task 1: live pytest gating implemented in `tests/conftest.py` and `pyproject.toml`.
 - [x] Task 2: live OpenAI embedding provider tests implemented in `tests/live/test_openai_embeddings.py`.
-- [ ] Task 3: live vector reindex/search tests.
+- [x] Task 3: live vector reindex/search tests implemented in `tests/live/test_live_reindex_search.py`.
 - [ ] Task 4: reusable live plugin tool smoke script/tests.
 - [ ] Task 5: pre-install plugin layout simulation tests.
 - [ ] Task 6: negative-path/stale-index coverage.
@@ -42,10 +42,20 @@ Task 2 verification on 2026-05-28:
 
 ```bash
 .venv/bin/python -m pytest tests/live/test_openai_embeddings.py -q
-HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live/test_openai_embeddings.py -q
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPE...EY" .venv/bin/python -m pytest tests/live/test_openai_embeddings.py -q
 ```
 
 Result: default run skipped 2 live tests; opt-in live run passed 2 tests.
+
+Task 3 verification on 2026-05-28:
+
+```bash
+.venv/bin/python -m pytest tests/live/test_live_reindex_search.py -q
+HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPE...EY" .venv/bin/python -m pytest tests/live/test_live_reindex_search.py -q
+.venv/bin/python -m pytest -q
+```
+
+Result: default live module run skipped 2 tests; opt-in live run passed 2 tests; full default suite passed with 195 passed and 4 skipped.
 
 ## Environment and Secrets
 
@@ -89,7 +99,7 @@ OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python scripts/smoke_live_openai.py
 
 ## Next Action
 
-Start Task 3 from the implementation plan: add `tests/live/test_live_reindex_search.py` for live vector reindex and hybrid search on a temporary synthetic vault.
+Start Task 4 from the implementation plan: add a reusable live plugin tool smoke script plus `tests/live/test_live_tool_workflow.py`.
 
 ## Paste-Into-New-Chat Prompt
 
