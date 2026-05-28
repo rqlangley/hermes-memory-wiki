@@ -20,7 +20,8 @@ def _write(root, relative_path, content):
     return path
 
 
-def _page(*, page_id, title, page_type, claims=()):
+def _page(*, page_id, title, page_type, entity_type=None, claims=()):
+    entity_type_line = f"entityType: {entity_type}\n" if entity_type else ""
     claim_lines = ""
     if claims:
         claim_lines = "claims:\n"
@@ -30,18 +31,20 @@ def _page(*, page_id, title, page_type, claims=()):
 id: {page_id}
 title: {title}
 pageType: {page_type}
-{claim_lines}---
+{entity_type_line}{claim_lines}---
 # {title}
 
 Body for {title}.
 """
 
 
-def _page_with_anonymous_claim(*, page_id, title, page_type, claim_text):
+def _page_with_anonymous_claim(*, page_id, title, page_type, claim_text, entity_type=None):
+    entity_type_line = f"entityType: {entity_type}\n" if entity_type else ""
     return f"""---
 id: {page_id}
 title: {title}
 pageType: {page_type}
+{entity_type_line}
 claims:
   - text: {claim_text}
 ---
@@ -57,9 +60,10 @@ def _seed_vault(root):
         root,
         "entities/ada.md",
         _page(
-            page_id="person:ada",
+            page_id="entity.ada",
             title="Ada Lovelace",
-            page_type="person",
+            page_type="entity",
+            entity_type="person",
             claims=(("claim:ada-1", "Ada wrote notes."),),
         ),
     )
@@ -67,9 +71,10 @@ def _seed_vault(root):
         root,
         "entities/babbage.md",
         _page(
-            page_id="person:babbage",
+            page_id="entity.babbage",
             title="Charles Babbage",
-            page_type="person",
+            page_type="entity",
+            entity_type="person",
         ),
     )
     _write(
@@ -105,13 +110,13 @@ def test_root_index_includes_page_counts(tmp_path):
 
     index = (root / "index.md").read_text(encoding="utf-8")
     assert result.vault_root == root
-    assert result.page_counts == {"concept": 1, "person": 2}
+    assert result.page_counts == {"concept": 1, "entity": 2}
     assert result.claim_count == 2
     assert "# Memory Wiki Index" in index
     assert "- Total pages: 3" in index
     assert "- Total claims: 2" in index
     assert "- concept: 1" in index
-    assert "- person: 2" in index
+    assert "- entity: 2" in index
 
 
 def test_directory_indexes_list_pages_by_kind(tmp_path):
@@ -122,9 +127,9 @@ def test_directory_indexes_list_pages_by_kind(tmp_path):
 
     entities_index = (root / "entities" / "index.md").read_text(encoding="utf-8")
     concepts_index = (root / "concepts" / "index.md").read_text(encoding="utf-8")
-    assert "## person" in entities_index
-    assert "- [Ada Lovelace](ada.md) — person:ada" in entities_index
-    assert "- [Charles Babbage](babbage.md) — person:babbage" in entities_index
+    assert "## entity" in entities_index
+    assert "- [Ada Lovelace](ada.md) — entity.ada" in entities_index
+    assert "- [Charles Babbage](babbage.md) — entity.babbage" in entities_index
     assert "## concept" in concepts_index
     assert "- [Analytical Engine](engine.md) — concept:engine" in concepts_index
 
@@ -136,12 +141,12 @@ def test_agent_digest_json_includes_pages_and_claim_counts(tmp_path):
     compile_vault(_config(root))
 
     digest = json.loads((root / ".hermes-wiki" / "cache" / "agent-digest.json").read_text(encoding="utf-8"))
-    assert digest["pageCounts"] == {"concept": 1, "person": 2}
+    assert digest["pageCounts"] == {"concept": 1, "entity": 2}
     assert digest["claimCount"] == 2
     assert digest["pages"] == [
         {"path": "concepts/engine.md", "id": "concept:engine", "title": "Analytical Engine", "kind": "concept", "claimCount": 1},
-        {"path": "entities/ada.md", "id": "person:ada", "title": "Ada Lovelace", "kind": "person", "claimCount": 1},
-        {"path": "entities/babbage.md", "id": "person:babbage", "title": "Charles Babbage", "kind": "person", "claimCount": 0},
+        {"path": "entities/ada.md", "id": "entity.ada", "title": "Ada Lovelace", "kind": "entity", "claimCount": 1},
+        {"path": "entities/babbage.md", "id": "entity.babbage", "title": "Charles Babbage", "kind": "entity", "claimCount": 0},
     ]
 
 
@@ -165,7 +170,7 @@ def test_claims_jsonl_contains_one_claim_per_line(tmp_path):
         },
         {
             "pagePath": "entities/ada.md",
-            "pageId": "person:ada",
+            "pageId": "entity.ada",
             "pageTitle": "Ada Lovelace",
             "claimId": "claim:ada-1",
             "claimDocumentId": "claim:entities/ada.md:claim:ada-1",
@@ -277,9 +282,10 @@ def test_anonymous_claims_correlate_with_search_documents(tmp_path):
         root,
         "entities/anonymous.md",
         _page_with_anonymous_claim(
-            page_id="person:anonymous",
+            page_id="entity.anonymous",
             title="Anonymous Person",
-            page_type="person",
+            page_type="entity",
+            entity_type="person",
             claim_text="This claim has no explicit ID.",
         ),
     )

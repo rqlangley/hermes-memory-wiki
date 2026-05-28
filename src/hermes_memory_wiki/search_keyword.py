@@ -65,6 +65,8 @@ def build_page_search_text(page: WikiPageSummary) -> str:
     _append_text(values, page.path)
     _append_text(values, page.id)
     _append_text(values, page.kind)
+    _append_text(values, page.page_type)
+    _append_text(values, page.entity_type)
     _append_text(values, _body_without_generated_blocks(page.body))
     _append_many(values, page.aliases)
     _append_many(values, page.source_ids)
@@ -250,7 +252,7 @@ def _mode_boost_score(
 
 
 def _is_person_like(page: WikiPageSummary) -> bool:
-    return bool(page.kind.lower() == "person" or page.person or page.role or page.person_card is not None)
+    return bool(page.entity_type == "person" or page.person or page.role or page.person_card is not None)
 
 
 def _is_person_identifier_match(page: WikiPageSummary, query_lower: str, tokens: list[str]) -> bool:

@@ -2,19 +2,20 @@ from hermes_memory_wiki.schema import (
     WikiClaim,
     WikiEvidence,
     WikiPageSummary,
+    infer_page_kind,
     page_kind_from_path,
     to_page_summary,
 )
 
 
-def test_page_kind_prefers_page_type_and_derives_from_path():
-    assert page_kind_from_path("sources/interview-1.md", {}) == "source"
-    assert page_kind_from_path("entities/ada-lovelace.md", {}) == "entity"
-    assert page_kind_from_path("concepts/analytical-engine.md", {}) == "concept"
-    assert page_kind_from_path("syntheses/history.md", {}) == "synthesis"
-    assert page_kind_from_path("reports/weekly.md", {}) == "report"
-    assert page_kind_from_path("misc/note.md", {}) == "page"
-    assert page_kind_from_path("entities/ada.md", {"pageType": "person"}) == "person"
+def test_page_kind_is_derived_from_openclaw_queryable_directory():
+    assert infer_page_kind("sources/interview-1.md") == "source"
+    assert infer_page_kind("entities/ada-lovelace.md") == "entity"
+    assert infer_page_kind("concepts/analytical-engine.md") == "concept"
+    assert infer_page_kind("syntheses/history.md") == "synthesis"
+    assert infer_page_kind("reports/weekly.md") == "report"
+    assert infer_page_kind("misc/note.md") is None
+    assert page_kind_from_path("entities/ada.md", {"pageType": "person"}) == "entity"
     assert page_kind_from_path("entities/ada.md", {"pageType": ""}) == "entity"
 
 
@@ -38,6 +39,8 @@ Body text.
     assert isinstance(summary, WikiPageSummary)
     assert summary.path == "entities/ada-lovelace.md"
     assert summary.kind == "entity"
+    assert summary.page_type is None
+    assert summary.entity_type is None
     assert summary.id == "explicit-id"
     assert summary.title == "Ada Lovelace"
     assert summary.source_ids == ["interview-1"]
@@ -125,7 +128,8 @@ Body
 
 def test_to_page_summary_supports_person_card_and_route_question_fields():
     raw = """---
-pageType: person
+pageType: entity
+entityType: person
 person: Ada Lovelace
 role: Mathematician
 bestUsedFor:
@@ -144,7 +148,9 @@ topics: algorithms
     summary = to_page_summary("entities/ada.md", raw)
 
     assert summary is not None
-    assert summary.kind == "person"
+    assert summary.kind == "entity"
+    assert summary.page_type == "entity"
+    assert summary.entity_type == "person"
     assert summary.person == "Ada Lovelace"
     assert summary.role == "Mathematician"
     assert summary.best_used_for == ["computing history", "analysis routing"]
@@ -154,3 +160,21 @@ topics: algorithms
     assert summary.person_card is not None
     assert summary.person_card.name == "Ada Lovelace"
     assert summary.person_card.role == "Mathematician"
+
+
+def test_entity_page_type_person_remains_broad_kind_entity_with_subtype_separate():
+    raw = """---
+id: entity.ada
+title: Ada Lovelace
+pageType: entity
+entityType: person
+---
+# Ada
+"""
+
+    summary = to_page_summary("entities/ada.md", raw)
+
+    assert summary is not None
+    assert summary.kind == "entity"
+    assert summary.page_type == "entity"
+    assert summary.entity_type == "person"

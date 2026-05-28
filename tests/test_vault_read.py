@@ -88,9 +88,10 @@ def test_read_queryable_pages_returns_page_summaries_from_raw_content(tmp_path):
         root,
         "entities/ada.md",
         """---
-id: person:ada
+id: entity.ada
 title: Ada Lovelace
-pageType: person
+pageType: entity
+entityType: person
 aliases:
   - Countess of Lovelace
 sourceIds:
@@ -108,8 +109,10 @@ Ada wrote notes.
     assert [page.path for page in pages] == ["entities/ada.md", "sources/source-notes.md"]
     assert all(isinstance(page, WikiPageSummary) for page in pages)
     ada = pages[0]
-    assert ada.kind == "person"
-    assert ada.id == "person:ada"
+    assert ada.kind == "entity"
+    assert ada.page_type == "entity"
+    assert ada.entity_type == "person"
+    assert ada.id == "entity.ada"
     assert ada.title == "Ada Lovelace"
     assert ada.aliases == ["Countess of Lovelace"]
     assert ada.source_ids == ["source:notes"]

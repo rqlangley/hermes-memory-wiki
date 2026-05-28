@@ -218,8 +218,9 @@ def test_mode_boosts_remain_applied(tmp_path) -> None:
         "entities/router.md",
         title="Router",
         body="general notes mention invoice triage",
-        page_type="person",
+        page_type="entity",
         frontmatter_extra=(
+            "entityType: person\n"
             "bestUsedFor:\n"
             "  - invoice escalation\n"
             "routing:\n"

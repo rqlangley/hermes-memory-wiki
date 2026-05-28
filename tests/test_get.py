@@ -15,9 +15,10 @@ def _write(root, relative_path, content):
 
 def _sample_page(title="Ada Lovelace"):
     return f"""---
-id: person:ada
+id: entity.ada
 title: {title}
-pageType: person
+pageType: entity
+entityType: person
 claims:
   - id: claim:ada-first-programmer
     text: Ada is often described as the first computer programmer.
@@ -38,10 +39,10 @@ def test_get_page_resolves_exact_relative_path(tmp_path):
 
     assert isinstance(result, GetPageResult)
     assert result.path == "entities/ada.md"
-    assert result.id == "person:ada"
+    assert result.id == "entity.ada"
     assert result.title == "Ada Lovelace"
     assert result.content == "# Heading Ignored For Frontmatter Title\n\nLine one.\nLine two.\nLine three."
-    assert "person:ada" not in result.content
+    assert "entity.ada" not in result.content
 
 
 def test_get_page_resolves_path_without_md_extension(tmp_path):
@@ -68,7 +69,7 @@ def test_get_page_resolves_frontmatter_id(tmp_path):
     root = tmp_path / "vault"
     _write(root, "entities/ada.md", _sample_page())
 
-    result = get_page(_config(root), "person:ada")
+    result = get_page(_config(root), "entity.ada")
 
     assert result is not None
     assert result.path == "entities/ada.md"
@@ -92,7 +93,7 @@ def test_get_page_resolves_claim_id_to_parent_page(tmp_path):
 
     assert result is not None
     assert result.path == "entities/ada.md"
-    assert result.id == "person:ada"
+    assert result.id == "entity.ada"
 
 
 def test_get_page_line_slicing_returns_expected_content_and_truncated_flag(tmp_path):

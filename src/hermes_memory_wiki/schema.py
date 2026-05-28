@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
-from typing import Any, Mapping
+from typing import Any, Literal, Mapping
 
 from hermes_memory_wiki.markdown import parse_wiki_markdown
 
@@ -14,6 +14,9 @@ class WikiEvidence:
     path: str | None = None
     lines: list[Any] = field(default_factory=list)
     confidence: Any = None
+    weight: Any = None
+    privacy_tier: str | None = None
+    updated_at: str | None = None
     note: str | None = None
     text: str | None = None
     raw: dict[str, Any] = field(default_factory=dict)
@@ -26,6 +29,7 @@ class WikiClaim:
     status: str | None = None
     confidence: Any = None
     evidence: list[WikiEvidence] = field(default_factory=list)
+    updated_at: str | None = None
     raw: dict[str, Any] = field(default_factory=dict)
 
 
@@ -45,6 +49,9 @@ class WikiPageSummary:
     kind: str
     id: str
     title: str
+    page_type: str | None = None
+    entity_type: str | None = None
+    canonical_id: str | None = None
     source_ids: list[str] = field(default_factory=list)
     aliases: list[str] = field(default_factory=list)
     claims: list[WikiClaim] = field(default_factory=list)
@@ -52,32 +59,53 @@ class WikiPageSummary:
     contradictions: list[str] = field(default_factory=list)
     status: str | None = None
     confidence: Any = None
+    privacy_tier: str | None = None
     updated_at: str | None = None
     body: str = ""
     frontmatter: dict[str, Any] = field(default_factory=dict)
     person: str | None = None
     role: str | None = None
     best_used_for: list[str] = field(default_factory=list)
+    not_enough_for: list[str] = field(default_factory=list)
     routing: dict[str, Any] = field(default_factory=dict)
     routes: list[str] = field(default_factory=list)
     topics: list[str] = field(default_factory=list)
     person_card: PersonCard | None = None
+    relationships: list[Any] = field(default_factory=list)
+    source_type: str | None = None
+    provenance_mode: str | None = None
+    source_path: str | None = None
+    bridge_relative_path: str | None = None
+    bridge_workspace_dir: str | None = None
+    unsafe_local_configured_path: str | None = None
+    unsafe_local_relative_path: str | None = None
+    last_refreshed_at: str | None = None
+
+
+PageKind = Literal["entity", "concept", "synthesis", "source", "report"]
+
+
+def infer_page_kind(relative_path: str) -> PageKind | None:
+    """Infer OpenClaw broad page kind from the queryable directory."""
+    normalized = relative_path.replace("\\", "/")
+    parts = PurePosixPath(normalized).parts
+    first_segment = parts[0] if parts else ""
+    if first_segment == "sources":
+        return "source"
+    if first_segment == "entities":
+        return "entity"
+    if first_segment == "concepts":
+        return "concept"
+    if first_segment == "syntheses":
+        return "synthesis"
+    if first_segment == "reports":
+        return "report"
+    return None
 
 
 def page_kind_from_path(path: str, frontmatter: Mapping[str, Any]) -> str:
-    """Return normalized page kind, preferring explicit frontmatter pageType."""
-    page_type = frontmatter.get("pageType")
-    if isinstance(page_type, str) and page_type.strip():
-        return page_type.strip()
-
-    first_segment = PurePosixPath(path).parts[0] if PurePosixPath(path).parts else ""
-    return {
-        "sources": "source",
-        "entities": "entity",
-        "concepts": "concept",
-        "syntheses": "synthesis",
-        "reports": "report",
-    }.get(first_segment, "page")
+    """Return OpenClaw directory-derived broad page kind."""
+    return infer_page_kind(path) or "page"
 
 
 def to_page_summary(relative_path: str, raw: str) -> WikiPageSummary | None:
@@ -89,6 +117,7 @@ def to_page_summary(relative_path: str, raw: str) -> WikiPageSummary | None:
     page_id = _first_nonempty_string(frontmatter.get("id"), f"{kind}:{_stem_slug(relative_path)}")
 
     best_used_for = _string_list(frontmatter.get("bestUsedFor")) + _string_list(frontmatter.get("best_used_for"))
+    not_enough_for = _string_list(frontmatter.get("notEnoughFor"))
     routing = _dict_mapping(frontmatter.get("routing"))
     routes = _string_list(frontmatter.get("routes"))
     topics = _string_list(frontmatter.get("topics"))
@@ -110,6 +139,9 @@ def to_page_summary(relative_path: str, raw: str) -> WikiPageSummary | None:
         kind=kind,
         id=page_id,
         title=title,
+        page_type=_optional_string(frontmatter.get("pageType")),
+        entity_type=_optional_string(frontmatter.get("entityType")),
+        canonical_id=_optional_string(frontmatter.get("canonicalId")),
         source_ids=_string_list(_first_present(frontmatter, "sourceIds", "source_ids", "sourceId", "source_id")),
         aliases=_string_list(frontmatter.get("aliases")),
         claims=_claims(frontmatter.get("claims")),
@@ -117,7 +149,18 @@ def to_page_summary(relative_path: str, raw: str) -> WikiPageSummary | None:
         contradictions=_text_list(frontmatter.get("contradictions")),
         status=_optional_string(frontmatter.get("status")),
         confidence=frontmatter.get("confidence"),
+        privacy_tier=_optional_string(frontmatter.get("privacyTier")),
         updated_at=_optional_string(_first_present(frontmatter, "updated_at", "updatedAt")),
+        relationships=_list_value(frontmatter.get("relationships")),
+        not_enough_for=not_enough_for,
+        source_type=_optional_string(frontmatter.get("sourceType")),
+        provenance_mode=_optional_string(frontmatter.get("provenanceMode")),
+        source_path=_optional_string(frontmatter.get("sourcePath")),
+        bridge_relative_path=_optional_string(frontmatter.get("bridgeRelativePath")),
+        bridge_workspace_dir=_optional_string(frontmatter.get("bridgeWorkspaceDir")),
+        unsafe_local_configured_path=_optional_string(frontmatter.get("unsafeLocalConfiguredPath")),
+        unsafe_local_relative_path=_optional_string(frontmatter.get("unsafeLocalRelativePath")),
+        last_refreshed_at=_optional_string(frontmatter.get("lastRefreshedAt")),
         body=doc.body,
         frontmatter=frontmatter,
         person=person,
@@ -212,6 +255,7 @@ def _claims(value: Any) -> list[WikiClaim]:
                 status=_optional_string(item.get("status")),
                 confidence=item.get("confidence"),
                 evidence=_evidence_list(item.get("evidence")),
+                updated_at=_optional_string(item.get("updatedAt")),
                 raw=raw,
             )
         )
@@ -234,6 +278,9 @@ def _evidence_list(value: Any) -> list[WikiEvidence]:
                 path=_optional_string(item.get("path")),
                 lines=_list_value(item.get("lines")),
                 confidence=item.get("confidence"),
+                weight=item.get("weight"),
+                privacy_tier=_optional_string(item.get("privacyTier")),
+                updated_at=_optional_string(item.get("updatedAt")),
                 note=_optional_string(item.get("note")),
                 text=_optional_string(item.get("text")),
                 raw=raw,

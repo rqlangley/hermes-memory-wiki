@@ -184,6 +184,51 @@ updatedAt: 2026-05-01T00:00:00+00:00
     assert issues[0].path == "concepts/invalid.md"
 
 
+def test_page_type_must_match_directory_derived_broad_kind(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    _write(
+        root,
+        "entities/ada.md",
+        _page(page_id="entity.ada", title="Ada", page_type="person"),
+    )
+
+    result = lint_vault(_config(root))
+
+    issues = _issues_by_code(result, "page-type-mismatch")
+    assert len(issues) == 1
+    assert issues[0].severity == "error"
+    assert issues[0].category == "schema"
+    assert issues[0].path == "entities/ada.md"
+    assert issues[0].details == {"expected": "entity", "actual": "person"}
+
+
+def test_page_type_must_match_each_openclaw_queryable_directory(tmp_path):
+    root = tmp_path / "vault"
+    initialize_vault(_config(root))
+    cases = [
+        ("concepts/engine.md", "concept.engine", "Wrong Concept", "entity", "concept"),
+        ("syntheses/foo.md", "synthesis.foo", "Wrong Synthesis", "entity", "synthesis"),
+        ("sources/foo.md", "source.foo", "Wrong Source", "entity", "source"),
+        ("reports/foo.md", "report.foo", "Wrong Report", "entity", "report"),
+    ]
+    for path, page_id, title, actual, _expected in cases:
+        _write(root, path, _page(page_id=page_id, title=title, page_type=actual))
+
+    result = lint_vault(_config(root))
+
+    mismatches = sorted(
+        (issue.path, issue.details["expected"], issue.details["actual"])
+        for issue in _issues_by_code(result, "page-type-mismatch")
+    )
+    assert mismatches == [
+        ("concepts/engine.md", "concept", "entity"),
+        ("reports/foo.md", "report", "entity"),
+        ("sources/foo.md", "source", "entity"),
+        ("syntheses/foo.md", "synthesis", "entity"),
+    ]
+
+
 def test_duplicate_claim_ids_create_schema_error(tmp_path):
     root = tmp_path / "vault"
     initialize_vault(_config(root))

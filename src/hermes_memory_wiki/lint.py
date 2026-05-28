@@ -112,6 +112,31 @@ def _read_pages_with_schema_issues(root: Path) -> _ReadResult:
             )
             continue
         if summary is not None:
+            page_type = summary.page_type
+            if not page_type:
+                issues.append(
+                    LintIssue(
+                        severity="error",
+                        category="schema",
+                        code="missing-page-type",
+                        message=f"Missing pageType; expected {summary.kind} for {relative_path}.",
+                        path=relative_path,
+                        page_id=summary.id,
+                        details={"expected": summary.kind},
+                    )
+                )
+            elif page_type != summary.kind:
+                issues.append(
+                    LintIssue(
+                        severity="error",
+                        category="schema",
+                        code="page-type-mismatch",
+                        message=f"pageType {page_type!r} must match directory-derived kind {summary.kind!r}.",
+                        path=relative_path,
+                        page_id=summary.id,
+                        details={"expected": summary.kind, "actual": page_type},
+                    )
+                )
             pages.append(summary)
     return _ReadResult(pages=pages, issues=issues)
 
