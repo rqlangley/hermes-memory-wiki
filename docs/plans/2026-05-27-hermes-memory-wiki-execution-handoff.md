@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 9.1
+**Last updated:** 2026-05-27 after Task 9.2
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists and has been pushed to origin through Task 9.1 after verification, review, and handoff update.
+The feature branch exists and has been pushed to origin through Task 9.2 after verification, review, and handoff update.
 
 Completed commits:
 
@@ -97,6 +97,9 @@ e1fe2ee feat: add hermes user plugin layout
 5d2991c docs: update handoff after wiki skills
 5c487ff docs: add installation and configuration guide
 56f4b83 docs: clarify memory wiki config limitations
+a327cf8 docs: update handoff after install docs
+9306a5e docs: add development workflow
+0cee728 docs: clarify development workflow guidance
 ```
 
 Completed tasks:
@@ -932,24 +935,49 @@ Review results:
 - Spec compliance after fix: PASS.
 - Code quality after fix: APPROVED.
 
+### Task 9.2 — Add development guide
+
+Files:
+
+- `docs/development.md`
+
+Implemented:
+
+- Development guide for local workflow, test/contribution commands, live-test policy, source-reference guidance, privacy/security guidance, and release checklist.
+- `.venv/bin/python` command convention documented throughout.
+- Live OpenAI tests documented as opt-in/future when a `tests/live/` suite exists and explicit permission/API key are present.
+
+Covered behavior:
+
+- TDD expectations documented;
+- standard focused/full test commands documented;
+- live OpenAI opt-in command and safety requirements documented;
+- source-reference notes documented;
+- privacy/security notes documented;
+- release checklist documented;
+- contribution workflow uses generic placeholders rather than task-specific files.
+
+Review results:
+
+- Spec compliance: PASS.
+- Initial code quality: REQUEST_CHANGES; fixed missing-`tests/live` command caveat and task-specific contribution examples.
+- Code quality after fix: APPROVED.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 9.1:
+Latest verification after Task 9.2:
 
 ```bash
-.venv/bin/python -m pip install -e .
-# passed
-
-.venv/bin/python -c 'import hermes_memory_wiki; print(hermes_memory_wiki.__version__)'
-# 0.1.0
-
 .venv/bin/python -m pytest -q
 # 192 passed
 
 .venv/bin/python -m compileall src tests
 # passed
+
+.venv/bin/python -c 'import hermes_memory_wiki; print(hermes_memory_wiki.__version__)'
+# 0.1.0
 ```
 
 ## Approved design summary
@@ -999,25 +1027,36 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 9.2 — Add development guide** from the implementation plan.
+Continue with **Task 10.1 — Add local plugin registration smoke test script** from the implementation plan.
 
 Files:
 
-- create `docs/development.md`
+- create `scripts/smoke_fake_hermes.py`
+- create `tests/test_smoke_workflow.py`
 
-Required documentation coverage:
+Required TDD workflow:
 
-- TDD expectations;
-- test commands;
-- live OpenAI tests opt-in;
-- source-reference notes;
-- privacy/security notes;
-- release checklist.
+1. temp vault;
+2. register plugin with fake context;
+3. call `wiki_init`;
+4. call `wiki_apply` create synthesis;
+5. call `wiki_compile`;
+6. call `wiki_reindex` with fake provider injection if available;
+7. call `wiki_search` hybrid;
+8. call `wiki_get`;
+9. call `wiki_lint`.
+
+Implementation notes:
+
+- keep script optional but useful for manual debugging;
+- tests must not require live OpenAI/network access;
+- use fake provider or monkeypatching for reindex/vector behavior if needed;
+- use `.venv/bin/python` for local commands.
 
 Expected commit message:
 
 ```text
-docs: add development workflow
+test: add wiki workflow smoke test
 ```
 
 ## Required workflow
