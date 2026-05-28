@@ -181,6 +181,32 @@ def test_missing_api_key_returns_diagnostic_without_corrupting_index(tmp_path, m
     assert _index(config).load_embeddings(previous_provider) == previous_embeddings
 
 
+def test_reindex_rejects_symlinked_vector_directory_without_writing_outside(tmp_path) -> None:
+    config = _config(tmp_path / "vault")
+    initialize_vault(config)
+    _write_page(config.vault_path, "concepts/search.md", title="Search")
+    outside = tmp_path / "outside-vector"
+    outside.mkdir()
+    vector_dir = config.vault_path / METADATA_DIRECTORY / "vector"
+    vector_dir.rmdir()
+    vector_dir.symlink_to(outside, target_is_directory=True)
+    provider = CountingFakeEmbeddingProvider()
+
+    result = reindex_vault(config, provider)
+
+    assert result.embedded_count == 0
+    assert result.skipped_count == 0
+    assert result.deleted_count == 0
+    assert result.provider == "fake"
+    assert result.model == "fake-embedding"
+    assert result.dimensions == 8
+    assert provider.calls == []
+    assert not (outside / "index.sqlite").exists()
+    assert len(result.diagnostics) == 1
+    assert "symlink" in result.diagnostics[0]
+    assert str(vector_dir) in result.diagnostics[0]
+
+
 def test_reindex_provider_failure_does_not_delete_or_mutate_existing_index(tmp_path) -> None:
     config = _config(tmp_path)
     initialize_vault(config)

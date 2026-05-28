@@ -634,6 +634,18 @@ def reindex_vault(
                 diagnostics=diagnostics,
             )
 
+    unsafe_path_diagnostic = _unsafe_vector_index_path_diagnostic(config)
+    if unsafe_path_diagnostic is not None:
+        return ReindexResult(
+            embedded_count=0,
+            skipped_count=0,
+            deleted_count=0,
+            provider=provider.provider,
+            model=provider.model,
+            dimensions=provider.dimensions,
+            diagnostics=[*diagnostics, unsafe_path_diagnostic],
+        )
+
     index = VectorIndex(_default_index_path(config))
     pages = read_queryable_pages(config.vault_path)
     documents = build_search_documents(pages)
@@ -722,6 +734,16 @@ def _provider_from_config(
 
 def _known_openai_dimensions(model: str) -> int | None:
     return _OPENAI_EMBEDDING_DIMENSIONS.get(model)
+
+
+def _unsafe_vector_index_path_diagnostic(config: MemoryWikiConfig) -> str | None:
+    metadata_dir = config.vault_path / METADATA_DIRECTORY
+    vector_dir = metadata_dir / "vector"
+    index_path = vector_dir / "index.sqlite"
+    for path in (metadata_dir, vector_dir, index_path):
+        if path.is_symlink():
+            return f"Vector index path must not be a symlink: {path}"
+    return None
 
 
 def _default_index_path(config: MemoryWikiConfig) -> Path:
