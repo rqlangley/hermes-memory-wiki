@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 11.2
+**Last updated:** 2026-05-27 after Task 11.3
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists and has been pushed to origin through Task 11.2 after verification, review, and handoff update.
+The feature branch exists and has been pushed to origin through Task 11.3 after verification, review, and handoff update.
 
 Completed commits:
 
@@ -106,6 +106,7 @@ ea3563e test: add wiki workflow smoke test
 2c27f02 docs: update handoff after smoke test
 64f08f4 fix: reject unsafe vector reindex paths
 bc03d9b docs: update handoff after spec review
+46aa784 docs: update handoff after quality review
 ```
 
 Completed tasks:
@@ -1045,11 +1046,17 @@ Review results:
 
 - Code quality: APPROVED.
 
+### Task 11.3 — Final verification
+
+Final non-live verification completed with `.venv/bin/python` on this host.
+
+Live OpenAI tests were not run because there is currently no `tests/live/` suite and live tests require explicit user approval plus an API key.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 11.2:
+Latest verification after Task 11.3:
 
 ```bash
 .venv/bin/python -m pytest -q
@@ -1058,8 +1065,14 @@ Latest verification after Task 11.2:
 .venv/bin/python -m compileall src tests
 # passed
 
+.venv/bin/python -m pip install -e .
+# passed
+
 .venv/bin/python -c 'import hermes_memory_wiki; print(hermes_memory_wiki.__version__)'
 # 0.1.0
+
+git status --short --branch
+# ## feat/initial-hermes-memory-wiki-plugin...origin/feat/initial-hermes-memory-wiki-plugin
 ```
 
 Additional quality-review scan:
@@ -1116,31 +1129,22 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 11.3 — Final verification** from the implementation plan.
+Continue with **Task 11.4 — Push and PR** from the implementation plan.
 
-Run with `.venv/bin/python` on this host:
-
-```bash
-.venv/bin/python -m pytest -q
-.venv/bin/python -m compileall src tests
-.venv/bin/python -m pip install -e .
-.venv/bin/python -c 'import hermes_memory_wiki; print(hermes_memory_wiki.__version__)'
-git status --short --branch
-```
-
-If live test is explicitly allowed and `OPENAI_API_KEY` is available, the planned live command is:
+Planned commands:
 
 ```bash
-HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live -v
+git status --short
+git push -u origin feat/initial-hermes-memory-wiki-plugin
+gh pr create --title "Build initial Hermes memory wiki plugin" --body-file docs/pr-body.md
 ```
 
-Current repo note: no `tests/live/` suite exists as of Task 9.2; do not run live tests unless such a suite exists and the user explicitly allows it.
+Current notes:
 
-Expected outcome:
-
-- all non-live verification passes;
-- update handoff with final verification evidence;
-- proceed to Task 11.4 push/PR only after verification passes.
+- Branch is already pushed and tracking `origin/feat/initial-hermes-memory-wiki-plugin` through Task 11.3.
+- `docs/pr-body.md` does not yet exist; create a concise PR body or use `gh pr create --fill` if appropriate.
+- Do not merge to `main` until review/verification passes.
+- If a PR already exists, report its URL rather than creating a duplicate.
 
 ## Required workflow
 
