@@ -107,15 +107,41 @@ Current inspected chunk:
 /home/langley/.npm-global/lib/node_modules/openclaw/dist/cli-Cx8TeRn1.js
 ```
 
-Important inspected regions:
+Important inspected regions verified on 2026-05-28:
+
+- Lines 363-370: `inferWikiPageKind(relativePath)` derives broad page kind from the first queryable directory only.
+  - `entities/` -> `entity`
+  - `concepts/` -> `concept`
+  - `sources/` -> `source`
+  - `syntheses/` -> `synthesis`
+  - `reports/` -> `report`
+  - all other paths -> `null`
+
+- Lines 372-407: `toWikiPageSummary(...)` summary/frontmatter fields.
+  - `kind` is the directory-derived broad kind, not `pageType`.
+  - Parsed fields include `id`, `pageType`, `entityType`, `canonicalId`, `aliases`, `sourceIds`, `claims`, `contradictions`, `questions`, `confidence`, `privacyTier`, `personCard`, `relationships`, `bestUsedFor`, `notEnoughFor`, `sourceType`, `provenanceMode`, `sourcePath`, `bridgeRelativePath`, `bridgeWorkspaceDir`, `unsafeLocalConfiguredPath`, `unsafeLocalRelativePath`, `lastRefreshedAt`, and `updatedAt`.
+
+- Lines 411-422: OpenClaw vault directory list.
+  - `entities`, `concepts`, `syntheses`, `sources`, `reports`, `_attachments`, `_views`, `.openclaw-wiki`, `.openclaw-wiki/locks`, `.openclaw-wiki/cache`.
+  - Hermes should keep `.hermes-wiki` naming and add its vector cache directory as a Hermes extension.
+
+- Lines 432-441: starter `AGENTS.md` guidance.
+  - Generated blocks are plugin-owned.
+  - Human notes outside managed markers are preserved.
+  - Source-backed claims are preferred over wiki-to-wiki citation loops.
+  - Structured `claims` with evidence are preferred over burying key beliefs in prose.
+  - `agent-digest.json` and `claims.jsonl` are machine-readable; Markdown pages are the human view.
+
+- Lines 443-461: starter `WIKI.md` guidance.
+  - Documents plugin ownership, vault/render/search modes, evidence layer vs synthesis layer, cache digest, and human notes block markers.
 
 - Lines 473-508: `initializeMemoryWikiVault(config, options)`.
   - Creates vault root and standard directories.
-  - Creates `AGENTS.md`, `WIKI.md`, `index.md`, `inbox.md`.
-  - Creates `.openclaw-wiki/state.json` and `.openclaw-wiki/log.jsonl`.
+  - Creates `AGENTS.md`, `WIKI.md`, `index.md`, `inbox.md` only when missing.
+  - Creates `.openclaw-wiki/state.json` and `.openclaw-wiki/log.jsonl` and appends an init log.
 
 - Lines 511-538: compile page groups and cache path constants.
-  - Page groups: `sources`, `entities`, `concepts`, `syntheses`, `reports`.
+  - Page groups are `source`, `entity`, `concept`, `synthesis`, `report` mapped to `sources`, `entities`, `concepts`, `syntheses`, `reports`.
   - Cache files include `.openclaw-wiki/cache/agent-digest.json` and `.openclaw-wiki/cache/claims.jsonl`.
 
 - Lines 1283-1350: `compileMemoryWikiVault(config)`.
@@ -126,6 +152,7 @@ Important inspected regions:
   - Writes digest artifacts.
   - Refreshes root and directory indexes.
   - Appends compile log.
+  - Returns `pageCounts`, `pages`, `claimCount`, and updated files.
 
 - Lines 1376-1443: query constants.
   - Query directories: `entities`, `concepts`, `sources`, `syntheses`, `reports`.
@@ -182,12 +209,40 @@ Important inspected regions:
 
 - Lines 2293-2450: `normalizeMemoryWikiMutationInput(...)` and `applyMemoryWikiMutation(...)`.
   - Supports `create_synthesis` and `update_metadata`.
+  - `create_synthesis` requires title, body, and at least one `sourceId`.
+  - Synthesis frontmatter uses `pageType: synthesis`, `id: synthesis.<slug>`, `title`, normalized `sourceIds`, optional structured `claims`, `contradictions`, `questions`, numeric `confidence`, `status`, and `updatedAt`.
+  - `update_metadata` requires lookup and narrowly updates `sourceIds`, `claims`, `contradictions`, `questions`, `confidence`, `status`, and `updatedAt`.
   - Preserves human notes block markers.
   - Writes frontmatter/body.
   - Compiles after mutation.
 
 - Lines 3260 onward: `lintMemoryWikiVault(config)`.
   - Use as reference for lint categories and report shape.
+
+### Claim and evidence schema
+
+Verified in `/home/langley/.npm-global/lib/node_modules/openclaw/dist/extensions/memory-wiki/index.js` lines 789-813 and the shared summary parser above:
+
+- Claims live in page frontmatter (`claims:`); there is no top-level `claims/` query directory.
+- Claim fields: `id`, required `text`, `status`, numeric `confidence` between 0 and 1, optional `evidence`, and `updatedAt`.
+- Evidence fields: `kind`, `sourceId`, `path`, `lines`, numeric `weight`, `note`, numeric `confidence` between 0 and 1, `privacyTier`, and `updatedAt`.
+
+### Lint behavior to mirror
+
+Verified primary entrypoint in `cli-Cx8TeRn1.js` lines 3260-3279; helper collection functions live immediately before that region in the same bundle.
+
+- Lint compiles first, then collects page issues and groups by category.
+- Lint writes a report and appends a lint log entry.
+- Required Hermes parity checks for the approved clean-slate pass:
+  - missing `id`;
+  - duplicate page `id`;
+  - duplicate claim `id`;
+  - missing `pageType`;
+  - `pageType` mismatching directory-derived broad kind;
+  - missing title;
+  - invalid markdown/frontmatter;
+  - provenance warnings for missing `sourceIds` on non-source/non-report pages and claims without evidence;
+  - low confidence, stale pages/claims, contradictions, open questions, broken wikilinks/source links, and source provenance metadata issues.
 
 ## OpenClaw memory-wiki config source
 
@@ -213,6 +268,14 @@ Important inspected regions:
   - Default render settings preserve human blocks and create backlinks/dashboards.
 
 hermes-memory-wiki should **not** port bridge or unsafe-local mode for v1.
+
+## Deferred or Hermes-specific features in this parity pass
+
+- Keep Hermes `.hermes-wiki` metadata naming instead of OpenClaw `.openclaw-wiki`.
+- Keep Hermes vector/hybrid search as an additive feature, but index OpenClaw-compatible page and claim documents.
+- Do not import or shell out to OpenClaw at runtime.
+- Do not support legacy divergent Hermes pages such as `entities/*.md` with `pageType: person`.
+- Bridge, unsafe-local, Obsidian CLI, and shared-memory backend behavior are reference-only unless a later phase explicitly scopes them.
 
 ## OpenClaw skills to adapt
 
