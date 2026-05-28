@@ -96,6 +96,6 @@ def test_live_hybrid_search_uses_openai_vectors_for_synthetic_vault(tmp_path) ->
         result.matched_claim_id == "claim.live-vector-integration" for result in results
     )
     assert any(
-        "vector" in result.metadata.get("search_types", [result.metadata.get("search_type")])
+        "vector" in result.metadata.get("searchTypes", [result.metadata.get("searchType")])
         for result in results
     )

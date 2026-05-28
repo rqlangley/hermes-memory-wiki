@@ -103,7 +103,7 @@ def _keyword_results(
     results = keyword_search(pages, query, max_results=max_results, mode=mode)
     for result in results:
         metadata = dict(result.metadata)
-        metadata.setdefault("search_type", "keyword")
+        metadata.setdefault("searchType", "keyword")
         result.metadata = metadata
     return results
 
@@ -173,13 +173,13 @@ def _fuse_results(
         existing = combined[key]
         existing.score += vector_weight * vector_score
         existing.metadata = _merge_metadata(existing.metadata, result.metadata)
-        search_types = list(existing.metadata.get("search_types", []))
+        search_types = list(existing.metadata.get("searchTypes", []))
         if "vector" not in search_types:
             search_types.append("vector")
         existing.metadata = _hybrid_metadata(
             existing.metadata,
             search_types=search_types,
-            lexical_score=float(existing.metadata.get("lexical_score", 0.0)),
+            lexical_score=float(existing.metadata.get("lexicalScore", 0.0)),
             vector_score=vector_score,
         )
         if not existing.snippet and result.snippet:
@@ -203,8 +203,8 @@ def _normalized_scores(results: list[WikiSearchResult]) -> dict[int, float]:
 def _fusion_key(result: WikiSearchResult) -> tuple[str, str | None]:
     if result.matched_claim_id:
         return result.path, result.matched_claim_id
-    document_type = result.metadata.get("document_type")
-    document_id = result.metadata.get("document_id")
+    document_type = result.metadata.get("documentType")
+    document_id = result.metadata.get("documentId")
     if document_type == "claim" and document_id:
         return result.path, str(document_id)
     return result.path, None
@@ -232,10 +232,10 @@ def _hybrid_metadata(
     vector_score: float,
 ) -> dict[str, Any]:
     updated = dict(metadata)
-    updated["search_type"] = "hybrid"
-    updated["search_types"] = search_types
-    updated["lexical_score"] = lexical_score
-    updated["vector_score"] = vector_score
+    updated["searchType"] = "hybrid"
+    updated["searchTypes"] = search_types
+    updated["lexicalScore"] = lexical_score
+    updated["vectorScore"] = vector_score
     return updated
 
 

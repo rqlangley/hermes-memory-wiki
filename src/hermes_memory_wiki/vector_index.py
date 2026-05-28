@@ -210,9 +210,9 @@ def _vector_result(document: SearchDocument, *, score: float, mode: str) -> Wiki
     metadata = dict(document.metadata)
     metadata.update(
         {
-            "search_type": "vector",
-            "document_id": document.id,
-            "document_type": document.doc_type,
+            "searchType": "vector",
+            "documentId": document.id,
+            "documentType": document.doc_type,
         }
     )
     matched_claim_id = None

@@ -128,8 +128,8 @@ def test_vector_search_returns_page_and_claim_results_with_snippets_and_metadata
     assert results[0].kind == "concept"
     assert results[0].search_mode == "route-question"
     assert "Use vector search" in results[0].snippet
-    assert results[0].metadata["search_type"] == "vector"
-    assert results[0].metadata["document_id"] == "page:topics/routing.md"
+    assert results[0].metadata["searchType"] == "vector"
+    assert results[0].metadata["documentId"] == "page:topics/routing.md"
     assert results[0].metadata["id"] == "concept:routing"
     assert "Route questions by semantic similarity" in results[1].snippet
     assert results[1].metadata["claimId"] == "claim-route"

@@ -233,7 +233,7 @@ def test_wiki_search_handler_calls_core_and_returns_results(monkeypatch, tmp_pat
                 snippet="Alice snippet",
                 search_mode="find-person",
                 matched_claim_id=None,
-                metadata={"search_type": "keyword"},
+                metadata={"searchType": "keyword"},
             )
         ], diagnostics
 

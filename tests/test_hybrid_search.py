@@ -91,7 +91,7 @@ def test_keyword_only_results_are_returned_when_vector_unavailable(tmp_path, mon
     assert diagnostics.vector_available is False
     assert any("Missing API key" in message for message in diagnostics.messages)
     assert diagnostics.messages.count(FALLBACK_DIAGNOSTIC) == 1
-    assert results[0].metadata["search_type"] == "keyword"
+    assert results[0].metadata["searchType"] == "keyword"
 
 
 def test_keyword_mode_works_without_openai_key_or_vector_index(tmp_path, monkeypatch) -> None:
@@ -106,7 +106,7 @@ def test_keyword_mode_works_without_openai_key_or_vector_index(tmp_path, monkeyp
     assert diagnostics.effective_mode == "keyword"
     assert diagnostics.vector_available is False
     assert diagnostics.messages == []
-    assert results[0].metadata["search_type"] == "keyword"
+    assert results[0].metadata["searchType"] == "keyword"
     assert not (tmp_path / METADATA_DIRECTORY / "vector" / "index.sqlite").exists()
 
 
@@ -124,7 +124,7 @@ def test_hybrid_fallback_reports_missing_index_when_provider_exists(tmp_path) ->
     assert any("Vector index not found" in message for message in diagnostics.messages)
     assert diagnostics.messages.count(FALLBACK_DIAGNOSTIC) == 1
     assert provider.calls == []
-    assert results[0].metadata["search_type"] == "keyword"
+    assert results[0].metadata["searchType"] == "keyword"
 
 
 def test_vector_only_results_are_returned_for_vector_mode(tmp_path) -> None:
@@ -144,7 +144,7 @@ def test_vector_only_results_are_returned_for_vector_mode(tmp_path) -> None:
     assert [result.path for result in results] == ["concepts/semantic.md", "concepts/weak.md"]
     assert diagnostics.effective_mode == "vector"
     assert diagnostics.vector_available is True
-    assert all(result.metadata["search_type"] == "vector" for result in results)
+    assert all(result.metadata["searchType"] == "vector" for result in results)
 
 
 def test_hybrid_combines_same_page_hits_by_path_and_claim_id(tmp_path) -> None:
@@ -178,10 +178,10 @@ def test_hybrid_combines_same_page_hits_by_path_and_claim_id(tmp_path) -> None:
     assert len(results) == 1
     assert results[0].path == "concepts/fusion.md"
     assert results[0].matched_claim_id == "claim-fusion"
-    assert results[0].metadata["search_type"] == "hybrid"
-    assert set(results[0].metadata["search_types"]) == {"keyword", "vector"}
-    assert "lexical_score" in results[0].metadata
-    assert "vector_score" in results[0].metadata
+    assert results[0].metadata["searchType"] == "hybrid"
+    assert set(results[0].metadata["searchTypes"]) == {"keyword", "vector"}
+    assert "lexicalScore" in results[0].metadata
+    assert "vectorScore" in results[0].metadata
     assert diagnostics.effective_mode == "hybrid"
 
 
