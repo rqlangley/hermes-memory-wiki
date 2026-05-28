@@ -275,6 +275,7 @@ hermes-memory-wiki should **not** port bridge or unsafe-local mode for v1.
 - Keep Hermes vector/hybrid search as an additive feature, but index OpenClaw-compatible page and claim documents.
 - Do not import or shell out to OpenClaw at runtime.
 - Do not support legacy divergent Hermes pages such as `entities/*.md` with `pageType: person`.
+- Source ingest parity is deferred as a follow-up: OpenClaw documents/uses a CLI source-ingest maintenance loop, but the current Hermes port only has init/status/search/get/apply/compile/reindex/lint tools and no source ingest/import helper. Phase 6 therefore records the gap instead of adding a new ingest surface.
 - Bridge, unsafe-local, Obsidian CLI, and shared-memory backend behavior are reference-only unless a later phase explicitly scopes them.
 
 ## OpenClaw skills to adapt

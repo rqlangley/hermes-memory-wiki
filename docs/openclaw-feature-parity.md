@@ -45,4 +45,5 @@ entityType: person
 - Hermes keeps `.hermes-wiki` naming rather than `.openclaw-wiki`.
 - Hermes vector/hybrid search remains additive, indexing the OpenClaw-compatible page/claim corpus.
 - No runtime OpenClaw dependency is allowed.
+- Source ingest parity is deferred: OpenClaw exposes CLI/source-ingest workflow guidance, but the current Hermes port has no `wiki_ingest`/`wiki_import` tool or ingest/import helper to align in this pass. Implementing source ingest should be a separately scoped follow-up rather than Phase 6 expansion.
 - Bridge, unsafe-local, Obsidian CLI, and shared-memory backend behavior are reference-only unless a later phase scopes them.
