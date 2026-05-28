@@ -1,7 +1,7 @@
 # hermes-memory-wiki Execution Handoff
 
 **Date:** 2026-05-27  
-**Last updated:** 2026-05-27 after Task 9.2
+**Last updated:** 2026-05-27 after Task 10.1
 
 ## Project
 
@@ -34,7 +34,7 @@ The implementation plan remains the source of truth for task order and task-leve
 
 ## Current implementation state
 
-The feature branch exists and has been pushed to origin through Task 9.2 after verification, review, and handoff update.
+The feature branch exists and has been pushed to origin through Task 10.1 after verification, review, and handoff update.
 
 Completed commits:
 
@@ -100,6 +100,9 @@ e1fe2ee feat: add hermes user plugin layout
 a327cf8 docs: update handoff after install docs
 9306a5e docs: add development workflow
 0cee728 docs: clarify development workflow guidance
+ed4e9e1 docs: update handoff after development guide
+ea3563e test: add wiki workflow smoke test
+98c38ca fix: keep smoke workflow offline
 ```
 
 Completed tasks:
@@ -963,15 +966,49 @@ Review results:
 - Initial code quality: REQUEST_CHANGES; fixed missing-`tests/live` command caveat and task-specific contribution examples.
 - Code quality after fix: APPROVED.
 
+### Task 10.1 — Add local plugin registration smoke test script
+
+Files:
+
+- `scripts/smoke_fake_hermes.py`
+- `tests/test_smoke_workflow.py`
+
+Implemented:
+
+- Offline fake Hermes registration context for local smoke workflow tests.
+- `run_smoke_workflow(...)` helper and CLI script that print JSON summary and return nonzero on failure.
+- End-to-end tool workflow through `wiki_init`, `wiki_apply`, `wiki_compile`, `wiki_reindex`, `wiki_search`, `wiki_get`, and `wiki_lint`.
+- Deterministic offline stubs/providers for reindex/search so the smoke workflow never calls live OpenAI/network providers, even when `OPENAI_API_KEY` is set or an existing vector index is present.
+
+Covered behavior:
+
+- plugin registers tools and skills with a fake context;
+- smoke workflow creates a temporary/configured vault;
+- synthesis page creation, compile, reindex, hybrid search request, page get, and lint all return JSON tool responses;
+- CLI/manual summary is JSON-serializable;
+- regression coverage protects against accidental live OpenAI/vector embedding during smoke workflow.
+
+Review results:
+
+- Spec compliance: PASS.
+- Initial code quality: REQUEST_CHANGES; fixed live-provider risk in smoke search when using an existing vector-indexed vault.
+- Code quality after fix: APPROVED.
+
 ## Latest verification
 
 Use `.venv/bin/python`; bare `python` is not available on this host.
 
-Latest verification after Task 9.2:
+Latest verification after Task 10.1:
 
 ```bash
+.venv/bin/python -m pytest tests/test_smoke_workflow.py -q
+# 2 passed
+
+.venv/bin/python -m pytest tests/test_smoke_workflow.py tests/test_tools.py tests/test_reindex.py tests/test_hybrid_search.py -q
+# 27 passed
+
 .venv/bin/python -m pytest -q
-# 192 passed
+# 194 passed
 
 .venv/bin/python -m compileall src tests
 # passed
@@ -1027,37 +1064,33 @@ Key observed fact: OpenClaw memory-wiki local wiki search is keyword/scoring bas
 
 ## Next task
 
-Continue with **Task 10.1 — Add local plugin registration smoke test script** from the implementation plan.
+Continue with **Task 11.1 — Spec compliance review** from the implementation plan.
 
-Files:
+Objective: verify implementation matches the approved design.
 
-- create `scripts/smoke_fake_hermes.py`
-- create `tests/test_smoke_workflow.py`
+Checklist:
 
-Required TDD workflow:
+- [ ] No OpenClaw runtime dependency.
+- [ ] No bridge-mode implementation.
+- [ ] Default vault path is `~/.hermes/wiki/main`.
+- [ ] Toolset is `memory_wiki`.
+- [ ] Tools include all required v1 tools.
+- [ ] Keyword search works without API key.
+- [ ] Vector search uses OpenAI embeddings when configured.
+- [ ] Hybrid search degrades cleanly.
+- [ ] Skills are registered and accurate.
+- [ ] Writes are restricted to configured vault root.
+- [ ] Tests pass offline.
 
-1. temp vault;
-2. register plugin with fake context;
-3. call `wiki_init`;
-4. call `wiki_apply` create synthesis;
-5. call `wiki_compile`;
-6. call `wiki_reindex` with fake provider injection if available;
-7. call `wiki_search` hybrid;
-8. call `wiki_get`;
-9. call `wiki_lint`.
+Use a reviewer subagent via `requesting-code-review`/`subagent-driven-development`.
 
-Implementation notes:
+Expected outcome:
 
-- keep script optional but useful for manual debugging;
-- tests must not require live OpenAI/network access;
-- use fake provider or monkeypatching for reindex/vector behavior if needed;
-- use `.venv/bin/python` for local commands.
+- PASS with evidence, or specific gaps to fix before Task 11.2.
 
-Expected commit message:
+Implementation note:
 
-```text
-test: add wiki workflow smoke test
-```
+- This is a review task, not a feature task. Do not add code unless the review finds valid blocking gaps and a scoped fix is needed.
 
 ## Required workflow
 
