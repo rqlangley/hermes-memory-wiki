@@ -39,6 +39,14 @@ Run a focused test file while developing:
 .venv/bin/python -m pytest tests/test_config.py -q
 ```
 
+Run the pre-install Hermes user-plugin layout simulation:
+
+```bash
+.venv/bin/python -m pytest tests/test_user_plugin_layout.py -q
+```
+
+This offline test builds a fake Hermes home under pytest `tmp_path` with `plugins/memory-wiki` symlinked to the checkout, parses `plugin.yaml`, imports the root plugin entry point from that layout, calls `register(ctx)`, verifies expected tools and skills, and checks public tool-schema field casing (`vaultPath`, `searchMode`, `maxResults`, `lineCount`, `op`, etc.). It must not create or mutate any real `~/.hermes` profile.
+
 Run a single test by node id:
 
 ```bash
@@ -95,6 +103,7 @@ Current live-testing implementation status:
 - 2026-05-28: live OpenAI embedding provider contract tests added in `tests/live/test_openai_embeddings.py`.
 - 2026-05-28: live vector reindex/hybrid search tests added in `tests/live/test_live_reindex_search.py` using temporary synthetic vaults.
 - 2026-05-28: reusable live plugin tool smoke workflow added in `scripts/smoke_live_openai.py` with coverage in `tests/live/test_live_tool_workflow.py`.
+- 2026-05-28: pre-install user-plugin layout simulation strengthened in `tests/test_user_plugin_layout.py`; focused run passed with 6 tests, and full default suite passed with 200 tests and 5 live skips.
 - 2026-05-28 verification: `.venv/bin/python -m pytest --markers | grep live_openai` shows the marker; `.venv/bin/python -m pytest -q` passed with 195 tests.
 - 2026-05-28 live verification: default `tests/live/test_openai_embeddings.py` run skipped 2 tests; opt-in live run passed 2 tests.
 - 2026-05-28 live verification: default `tests/live/test_live_reindex_search.py` run skipped 2 tests; opt-in live run passed 2 tests; full default suite passed with 195 passed and 4 skipped.

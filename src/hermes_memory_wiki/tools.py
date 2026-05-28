@@ -38,7 +38,6 @@ def _tool_specs() -> list[JsonDict]:
                     **_vault_path_property(),
                     "query": {"type": "string", "minLength": 1},
                     "maxResults": {"type": "integer", "minimum": 1, "default": 10},
-                    "mode": {"type": "string", "default": "auto"},
                     "searchMode": {"type": "string", "enum": ["auto", "keyword", "vector", "hybrid"]},
                 },
                 required=["query"],

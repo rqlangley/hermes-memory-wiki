@@ -23,7 +23,7 @@ Build and verify opt-in live OpenAI and pre-install plugin integration tests for
 - [x] Task 2: live OpenAI embedding provider tests implemented in `tests/live/test_openai_embeddings.py`.
 - [x] Task 3: live vector reindex/search tests implemented in `tests/live/test_live_reindex_search.py`.
 - [x] Task 4: reusable live plugin tool smoke script/tests implemented in `scripts/smoke_live_openai.py` and `tests/live/test_live_tool_workflow.py`.
-- [ ] Task 5: pre-install plugin layout simulation tests.
+- [x] Task 5: pre-install plugin layout simulation tests strengthened in `tests/test_user_plugin_layout.py`.
 - [ ] Task 6: negative-path/stale-index coverage.
 - [ ] Task 7: final verification/docs refresh.
 
@@ -78,6 +78,18 @@ env -u OPENAI_API_KEY -u PYTHONPATH /usr/bin/python3 -S scripts/smoke_live_opena
 
 Result: checkout import/bootstrap regression test passed; explicit `--json` missing-key CLI path returned safe JSON with exit code 1; opt-in live tool workflow still passed; bare-interpreter no-key CLI check returned JSON with exit code 1 instead of a traceback.
 
+Task 5 verification on 2026-05-28:
+
+```bash
+.venv/bin/python -m pytest tests/test_user_plugin_layout.py -q
+.venv/bin/python -m compileall src tests scripts
+.venv/bin/python -m pytest -q
+```
+
+RED result before the minimal schema fix: focused layout test failed because `wiki_search` still advertised legacy `mode` in its public schema instead of only the external `searchMode` field.
+
+GREEN result: focused pre-install layout simulation passed 6 tests; compileall passed; full default suite passed with 200 passed and 5 skipped. Commit: `test: strengthen pre-install plugin layout coverage`.
+
 ## Environment and Secrets
 
 - `OPENAI_API_KEY` must be supplied from the caller's local secret manager or untracked environment.
@@ -120,7 +132,7 @@ OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python scripts/smoke_live_openai.py
 
 ## Next Action
 
-Start Task 5 from the implementation plan: strengthen pre-install plugin layout simulation tests without mutating the real Hermes profile.
+Start Task 6 from the implementation plan: add deterministic negative-path and stale-index integration coverage.
 
 ## Paste-Into-New-Chat Prompt
 
