@@ -1,8 +1,10 @@
 # hermes-memory-wiki
 
-hermes-memory-wiki is a Hermes Agent plugin for managing a persistent markdown knowledge wiki. It adds structured wiki tools, provenance-aware pages, deterministic compile/lint workflows, and hybrid keyword + vector search without modifying Hermes core.
+`hermes-memory-wiki` gives Hermes Agent a durable, source-backed memory wiki: a local Markdown vault that agents can initialize, search, update, compile, lint, and reindex through normal Hermes tools. It is useful when plain chat memory is too small or too unstructured, but you still want knowledge to stay inspectable, editable, and versionable as files.
 
-The plugin is installed either as an editable Python package or as a user plugin copied/symlinked into `~/.hermes/plugins/memory-wiki`. At runtime it provides the `memory_wiki` toolset:
+This repository is a native Hermes Agent port of the OpenClaw `memory-wiki` plugin. It keeps the OpenClaw-style information architecture and maintenance workflow—directory-derived page kinds, structured frontmatter, source-backed claims, generated reports, and compile/lint loops—while avoiding an OpenClaw runtime dependency. The Hermes port also adds Hermes-native tool registration, workflow skills, and hybrid keyword + vector search.
+
+At runtime it provides the `memory_wiki` toolset:
 
 - `wiki_init`
 - `wiki_status`
@@ -23,7 +25,13 @@ For best agent discoverability, install these as native Hermes skills under `~/.
 
 ## Quick start
 
-From this repository:
+The easiest installation path is to ask your Hermes agent to do it for you. For example:
+
+```text
+Please clone https://github.com/rqlangley/hermes-memory-wiki, install it as an editable Hermes user plugin, enable the memory-wiki plugin and memory_wiki toolset, install the bundled wiki skills as native Hermes skills, then initialize the default wiki vault.
+```
+
+That lets the agent adapt the steps to the active Hermes profile, venv, config location, and plugin layout. If you prefer to install manually, from this repository run:
 
 ```bash
 .venv/bin/python -m pip install -e .
@@ -67,6 +75,8 @@ If you do not want vector embeddings in the current user-plugin integration, do 
 
 - [Installation guide](docs/installation.md)
 - [Configuration guide](docs/configuration.md)
+- [Schema guide](docs/schema.md)
+- [OpenClaw feature parity notes](docs/openclaw-feature-parity.md)
 - [Development and testing guide](docs/development.md)
 
 ## Testing
@@ -82,7 +92,7 @@ Live OpenAI tests are opt-in and marked `live_openai`; they are skipped unless `
 ## Goals
 
 - Add wiki-management tools to Hermes Agent without modifying the default Hermes install.
-- Provide OpenClaw memory-wiki-like page management, search, compile, and lint workflows.
+- Port the OpenClaw memory-wiki information architecture and maintenance workflow to native Hermes tools and skills.
 - Build vector search in from the beginning using OpenAI embeddings, with deterministic keyword search always available as a fallback.
 - Package reusable skills for wiki maintenance, authoring, and search workflows.
 
