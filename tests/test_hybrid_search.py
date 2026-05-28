@@ -9,6 +9,9 @@ from hermes_memory_wiki.vector_index import SearchDocument, VectorIndex
 from hermes_memory_wiki.vault import METADATA_DIRECTORY
 
 
+FALLBACK_DIAGNOSTIC = "Vector search unavailable; falling back to keyword search."
+
+
 @dataclass
 class MappingEmbeddingProvider:
     vectors: dict[str, list[float]]
@@ -87,8 +90,7 @@ def test_keyword_only_results_are_returned_when_vector_unavailable(tmp_path, mon
     assert diagnostics.effective_mode == "keyword"
     assert diagnostics.vector_available is False
     assert any("Missing API key" in message for message in diagnostics.messages)
-    assert any("Vector search unavailable" in message for message in diagnostics.messages)
-    assert any("Falling back to keyword search" in message for message in diagnostics.messages)
+    assert diagnostics.messages.count(FALLBACK_DIAGNOSTIC) == 1
     assert results[0].metadata["search_type"] == "keyword"
 
 
@@ -120,8 +122,7 @@ def test_hybrid_fallback_reports_missing_index_when_provider_exists(tmp_path) ->
     assert diagnostics.effective_mode == "keyword"
     assert diagnostics.vector_available is False
     assert any("Vector index not found" in message for message in diagnostics.messages)
-    assert any("Vector search unavailable" in message for message in diagnostics.messages)
-    assert any("Falling back to keyword search" in message for message in diagnostics.messages)
+    assert diagnostics.messages.count(FALLBACK_DIAGNOSTIC) == 1
     assert provider.calls == []
     assert results[0].metadata["search_type"] == "keyword"
 
@@ -244,7 +245,7 @@ def test_diagnostics_explain_vector_fallback_from_config_default(tmp_path, monke
     assert diagnostics.requested_mode == "hybrid"
     assert diagnostics.effective_mode == "keyword"
     assert diagnostics.vector_available is False
-    assert any("Falling back to keyword search" in message for message in diagnostics.messages)
+    assert diagnostics.messages.count(FALLBACK_DIAGNOSTIC) == 1
     assert any("Missing API key" in message for message in diagnostics.messages)
 
 
@@ -259,4 +260,4 @@ def test_auto_config_default_normalizes_to_hybrid(tmp_path, monkeypatch) -> None
     assert diagnostics.requested_mode == "hybrid"
     assert diagnostics.effective_mode == "keyword"
     assert diagnostics.vector_available is False
-    assert any("Falling back to keyword search" in message for message in diagnostics.messages)
+    assert diagnostics.messages.count(FALLBACK_DIAGNOSTIC) == 1

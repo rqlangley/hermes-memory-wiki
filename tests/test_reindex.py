@@ -154,6 +154,35 @@ def test_reindex_counts_deleted_documents(tmp_path) -> None:
     assert _embedded_ids(config, provider) == ["page:concepts/keep.md"]
 
 
+def test_reindex_deletes_claim_documents_for_removed_page(tmp_path) -> None:
+    config = _config(tmp_path)
+    initialize_vault(config)
+    _write_page(tmp_path, "concepts/keep.md", title="Keep", body="Keep body.")
+    _write_page(
+        tmp_path,
+        "concepts/remove.md",
+        title="Remove",
+        body="Removed body.",
+        claim="Removed claim unique needle.",
+    )
+    provider = CountingFakeEmbeddingProvider()
+    reindex_vault(config, provider)
+    assert _embedded_ids(config, provider) == [
+        "claim:concepts/remove.md:claim-main",
+        "page:concepts/keep.md",
+        "page:concepts/remove.md",
+    ]
+
+    (tmp_path / "concepts" / "remove.md").unlink()
+    result = reindex_vault(config, provider)
+
+    assert result.embedded_count == 0
+    assert result.skipped_count == 1
+    assert result.deleted_count == 2
+    assert result.diagnostics == []
+    assert _embedded_ids(config, provider) == ["page:concepts/keep.md"]
+
+
 def test_missing_api_key_returns_diagnostic_without_corrupting_index(tmp_path, monkeypatch) -> None:
     missing_env = "HERMES_MEMORY_WIKI_TEST_MISSING_OPENAI_API_KEY"
     monkeypatch.delenv(missing_env, raising=False)
