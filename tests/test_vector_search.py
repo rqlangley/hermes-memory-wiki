@@ -100,7 +100,7 @@ def test_vector_search_returns_page_and_claim_results_with_snippets_and_metadata
         page_path="topics/routing.md",
         title="Routing",
         text="Title: Routing\nBody:\nUse vector search for routing questions.",
-        metadata={"page_id": "concept:routing", "source_ids": ["source-a"], "claim_count": 1},
+        metadata={"id": "concept:routing", "sourceIds": ["source-a"], "claimCount": 1},
     )
     claim_doc = _doc(
         "claim:topics/routing.md:claim-route",
@@ -108,7 +108,7 @@ def test_vector_search_returns_page_and_claim_results_with_snippets_and_metadata
         page_path="topics/routing.md",
         title="Routing",
         text="Page: Routing\nClaim ID: claim-route\nClaim: Route questions by semantic similarity.\nStatus: active",
-        metadata={"page_id": "concept:routing", "claim_id": "claim-route", "status": "active", "confidence": 0.8},
+        metadata={"id": "concept:routing", "claimId": "claim-route", "status": "active", "claimConfidence": 0.8},
     )
     weak_doc = _doc("page:topics/weak.md", page_path="topics/weak.md", title="Weak")
     index = _index(config)
@@ -130,9 +130,9 @@ def test_vector_search_returns_page_and_claim_results_with_snippets_and_metadata
     assert "Use vector search" in results[0].snippet
     assert results[0].metadata["search_type"] == "vector"
     assert results[0].metadata["document_id"] == "page:topics/routing.md"
-    assert results[0].metadata["page_id"] == "concept:routing"
+    assert results[0].metadata["id"] == "concept:routing"
     assert "Route questions by semantic similarity" in results[1].snippet
-    assert results[1].metadata["claim_id"] == "claim-route"
+    assert results[1].metadata["claimId"] == "claim-route"
 
 
 def test_vector_search_missing_index_preserves_diagnostics_without_embedding_query(tmp_path) -> None:

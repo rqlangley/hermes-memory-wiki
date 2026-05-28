@@ -167,7 +167,7 @@ def test_hybrid_combines_same_page_hits_by_path_and_claim_id(tmp_path) -> None:
         title="Fusion",
         doc_type="claim",
         text="Page: Fusion\nClaim ID: claim-fusion\nClaim: Fusion needle claim should merge with the vector claim.",
-        metadata={"page_id": "concept:fusion", "claim_id": "claim-fusion"},
+        metadata={"id": "concept:fusion", "claimId": "claim-fusion"},
     )
     index = _index(config)
     index.upsert_documents([claim_doc])

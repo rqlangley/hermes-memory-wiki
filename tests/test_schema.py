@@ -103,7 +103,7 @@ Body
     assert evidence.kind == "source"
     assert evidence.source_id == "source-1"
     assert evidence.path == "sources/source-1.md"
-    assert evidence.lines == [10, 12]
+    assert evidence.lines == "[10, 12]"
     assert evidence.confidence == 0.9
     assert evidence.note == "annotated note"
 

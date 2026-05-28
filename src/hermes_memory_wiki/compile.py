@@ -497,7 +497,7 @@ def _claim_document_map(search_documents: Sequence[SearchDocument]) -> dict[tupl
     for document in search_documents:
         if document.doc_type != "claim":
             continue
-        ordinal = document.metadata.get("claim_ordinal")
+        ordinal = document.metadata.get("claimOrdinal")
         if isinstance(ordinal, int):
             claim_documents[(document.page_path, ordinal)] = document
     return claim_documents

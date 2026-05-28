@@ -34,6 +34,7 @@ class WikiMutation:
     contradictions: list[str] = field(default_factory=list)
     confidence: int | float | None = None
     status: str = "active"
+    updated_at: str | None = None
     path: str | None = None
     id: str | None = None
     lookup: str | None = None
@@ -93,6 +94,7 @@ def _normalize_update_metadata(raw: Mapping[str, Any]) -> WikiMutation:
             "contradictions",
             "confidence",
             "status",
+            "updatedAt",
         )
         if key in raw
     )
@@ -106,6 +108,7 @@ def _normalize_update_metadata(raw: Mapping[str, Any]) -> WikiMutation:
         contradictions=_string_list(raw.get("contradictions")) if "contradictions" in raw else [],
         confidence=_optional_confidence(raw.get("confidence")) if "confidence" in raw else None,
         status=_optional_string(raw.get("status")) or "",
+        updated_at=_optional_string(raw.get("updatedAt")) if "updatedAt" in raw else None,
         update_fields=update_fields,
     )
 
@@ -140,7 +143,13 @@ def _apply_update_metadata(config: MemoryWikiConfig, mutation: WikiMutation) -> 
         else:
             frontmatter["confidence"] = mutation.confidence
 
-    frontmatter["updatedAt"] = datetime.now(timezone.utc).isoformat()
+    if "updatedAt" in mutation.update_fields:
+        if mutation.updated_at is None:
+            frontmatter.pop("updatedAt", None)
+        else:
+            frontmatter["updatedAt"] = mutation.updated_at
+    else:
+        frontmatter["updatedAt"] = datetime.now(timezone.utc).isoformat()
     path.write_text(render_wiki_markdown(WikiMarkdown(frontmatter, doc.body)), encoding="utf-8")
 
     return ApplyResult(path=page.path, id=str(frontmatter.get("id") or page.id), created=False)

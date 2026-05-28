@@ -469,7 +469,7 @@ def test_stale_vector_index_creates_vector_index_warning(tmp_path):
     issues = _issues_by_code(result, "stale-vector-index")
     assert len(issues) == 1
     assert issues[0].severity == "warning"
-    assert issues[0].category == "vector-index"
+    assert issues[0].category == "quality"
     assert issues[0].path == "concepts/vector.md"
 
 
@@ -494,7 +494,7 @@ def test_missing_and_extra_vector_documents_create_vector_index_warnings(tmp_pat
 
     issues = _issues_by_code(result, "stale-vector-index")
     assert len(issues) == 2
-    assert {issue.category for issue in issues} == {"vector-index"}
+    assert {issue.category for issue in issues} == {"quality"}
     assert {issue.severity for issue in issues} == {"warning"}
     assert {issue.path for issue in issues} == {"concepts/vector.md", None}
     assert {issue.details.get("documentId") for issue in issues} == {
@@ -529,7 +529,7 @@ def test_symlinked_vector_directory_is_not_followed(tmp_path):
     issues = _issues_by_code(result, "stale-vector-index")
     assert len(issues) == 1
     assert issues[0].severity == "warning"
-    assert issues[0].category == "vector-index"
+    assert issues[0].category == "quality"
     assert "symlink" in issues[0].message.lower()
     assert issues[0].details["indexPath"] == f"{METADATA_DIRECTORY}/vector"
     assert "documentId" not in issues[0].details

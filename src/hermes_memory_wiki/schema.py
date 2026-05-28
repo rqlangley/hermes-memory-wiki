@@ -12,7 +12,7 @@ class WikiEvidence:
     kind: str | None = None
     source_id: str | None = None
     path: str | None = None
-    lines: list[Any] = field(default_factory=list)
+    lines: str | None = None
     confidence: Any = None
     weight: Any = None
     privacy_tier: str | None = None
@@ -285,7 +285,7 @@ def _evidence_list(value: Any) -> list[WikiEvidence]:
                 kind=_optional_string(item.get("kind")),
                 source_id=_optional_string(item.get("sourceId")),
                 path=_optional_string(item.get("path")),
-                lines=_list_value(item.get("lines")),
+                lines=_optional_string(item.get("lines")),
                 confidence=item.get("confidence"),
                 weight=item.get("weight"),
                 privacy_tier=_optional_string(item.get("privacyTier")),

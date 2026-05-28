@@ -256,7 +256,7 @@ def test_claims_jsonl_contains_one_claim_per_line(tmp_path):
                     "kind": "source",
                     "sourceId": "source.ada-notes",
                     "path": "sources/ada-notes.md",
-                    "lines": ["1-3"],
+                    "lines": "1-3",
                     "weight": 1,
                     "confidence": 0.9,
                     "privacyTier": None,
@@ -426,4 +426,4 @@ def test_anonymous_claims_correlate_with_search_documents(tmp_path):
     assert claims[0]["claimId"] != "claim-0"
     assert claims[0]["claimDocumentId"] == claim_doc["id"]
     assert claims[0]["claimId"] in claim_doc["text"]
-    assert claim_doc["metadata"]["claim_ordinal"] == 0
+    assert claim_doc["metadata"]["claimOrdinal"] == 0

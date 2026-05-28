@@ -42,6 +42,7 @@ EXPECTED_SCHEMA_PROPERTIES = {
         "contradictions",
         "confidence",
         "status",
+        "updatedAt",
     },
     "wiki_compile": {"vaultPath"},
     "wiki_reindex": {"vaultPath", "force"},

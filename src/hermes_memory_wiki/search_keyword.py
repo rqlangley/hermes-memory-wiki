@@ -402,7 +402,12 @@ def _token_hit_count(line: str, tokens: list[str]) -> int:
     return sum(1 for token in tokens if token in line)
 
 
-def _append_many(values: list[str], items: list[Any]) -> None:
+def _append_many(values: list[str], items: Any) -> None:
+    if items is None:
+        return
+    if isinstance(items, str):
+        _append_text(values, items)
+        return
     for item in items:
         _append_text(values, item)
 

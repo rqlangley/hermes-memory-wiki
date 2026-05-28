@@ -335,18 +335,18 @@ def test_page_document_includes_title_path_kind_claims_questions_and_body() -> N
     assert "Contradictions:\n- Older notes mention non-deterministic output." in page_doc.text
     assert "Body:\nHuman-authored body line." in page_doc.text
     assert page_doc.metadata == {
-        "page_id": "concept:search",
-        "kind": "concept",
-        "page_type": None,
-        "entity_type": None,
-        "source_ids": ["source-1"],
-        "aliases": ["Memory Search"],
-        "confidence": None,
-        "status": None,
-        "updated_at": None,
-        "claim_count": 1,
-        "question_count": 1,
-        "contradiction_count": 1,
+"id": "concept:search",
+            "kind": "concept",
+            "pageType": None,
+            "entityType": None,
+            "sourceIds": ["source-1"],
+            "aliases": ["Memory Search"],
+            "confidence": None,
+            "status": None,
+            "updatedAt": None,
+            "claimCount": 1,
+            "questionCount": 1,
+            "contradictionCount": 1,
     }
 
 
@@ -368,7 +368,7 @@ def test_claim_document_includes_claim_text_page_title_source_ids_and_evidence()
                         kind="note",
                         source_id="evidence-source",
                         path="sources/evidence.md",
-                        lines=[3, 5],
+                        lines="3-5",
                         note="important note",
                         text="quoted evidence text",
                     )
@@ -395,28 +395,28 @@ def test_claim_document_includes_claim_text_page_title_source_ids_and_evidence()
     assert "source_id=evidence-source" in claim_doc.text
     assert "kind=note" in claim_doc.text
     assert "path=sources/evidence.md" in claim_doc.text
-    assert "lines=3,5" in claim_doc.text
+    assert "lines=3-5" in claim_doc.text
     assert "note=important note" in claim_doc.text
     assert "text=quoted evidence text" in claim_doc.text
     assert claim_doc.metadata == {
-        "page_id": "concept:evidence",
-        "kind": "concept",
-        "page_type": None,
-        "entity_type": None,
-        "source_ids": ["page-source"],
-        "confidence": None,
-        "updated_at": None,
-        "claim_id": "claim-evidence",
-        "claim_ordinal": 0,
-        "status": "active",
-        "confidence": 0.9,
-        "page_source_ids": ["page-source"],
+"id": "concept:evidence",
+            "kind": "concept",
+            "pageType": None,
+            "entityType": None,
+            "sourceIds": ["page-source"],
+            "confidence": None,
+            "updatedAt": None,
+            "claimId": "claim-evidence",
+            "claimOrdinal": 0,
+            "status": "active",
+            "claimConfidence": 0.9,
+            "pageSourceIds": ["page-source"],
         "evidence": [
             {
                 "kind": "note",
-                "source_id": "evidence-source",
+                "sourceId": "evidence-source",
                 "path": "sources/evidence.md",
-                "lines": [3, 5],
+                "lines": "3-5",
                 "confidence": None,
                 "note": "important note",
                 "text": "quoted evidence text",
@@ -481,7 +481,7 @@ def test_vector_documents_keep_directory_derived_kind_not_arbitrary_page_type() 
 
     assert doc.kind == "entity"
     assert doc.metadata["kind"] == "entity"
-    assert doc.metadata["page_type"] == "person"
+    assert doc.metadata["pageType"] == "person"
 
 
 def test_generated_related_blocks_and_frontmatter_are_excluded_from_body_text() -> None:

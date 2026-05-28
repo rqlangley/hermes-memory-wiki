@@ -372,3 +372,15 @@ def test_update_metadata_changes_updated_at(tmp_path):
     doc = parse_wiki_markdown(page_path.read_text(encoding="utf-8"))
     assert doc.frontmatter["updatedAt"] != "2000-01-01T00:00:00+00:00"
     assert re.match(r"^\d{4}-\d{2}-\d{2}T", doc.frontmatter["updatedAt"])
+
+
+def test_update_metadata_accepts_explicit_updated_at(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    created = _create_page(config)
+    page_path = config.vault_path / created.path
+
+    apply_mutation(config, normalize_mutation(_update_raw(updatedAt="2026-05-28T12:00:00Z")))
+
+    doc = parse_wiki_markdown(page_path.read_text(encoding="utf-8"))
+    assert doc.frontmatter["updatedAt"] == "2026-05-28T12:00:00Z"

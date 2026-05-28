@@ -434,7 +434,7 @@ def _vector_index_issues(root: Path, pages: Sequence[WikiPageSummary]) -> list[L
         return [
             LintIssue(
                 severity="warning",
-                category="vector-index",
+                category="quality",
                 code="stale-vector-index",
                 message=f"Vector index could not be inspected: {error}",
                 details={"indexPath": db_path.relative_to(root).as_posix()},
@@ -460,7 +460,7 @@ def _vector_index_issues(root: Path, pages: Sequence[WikiPageSummary]) -> list[L
             doc_id,
             LintIssue(
                 severity="warning",
-                category="vector-index",
+                category="quality",
                 code="stale-vector-index",
                 message="Vector index contains a document that is no longer in the wiki.",
                 details={"documentId": doc_id},
@@ -478,7 +478,7 @@ def _stored_vector_documents(db_path: Path) -> dict[str, str]:
 def _unsafe_vector_index_issue(root: Path, path: Path) -> LintIssue:
     return LintIssue(
         severity="warning",
-        category="vector-index",
+        category="quality",
         code="stale-vector-index",
         message="Vector index was not inspected because its metadata path is a symlink.",
         details={"indexPath": path.relative_to(root).as_posix()},
@@ -488,7 +488,7 @@ def _unsafe_vector_index_issue(root: Path, path: Path) -> LintIssue:
 def _vector_issue(doc: SearchDocument, message: str) -> LintIssue:
     return LintIssue(
         severity="warning",
-        category="vector-index",
+        category="quality",
         code="stale-vector-index",
         message=message,
         path=doc.page_path,
