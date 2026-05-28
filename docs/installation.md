@@ -114,27 +114,51 @@ Start a fresh Hermes session after enabling the toolset. The available tools sho
 - `wiki_reindex`
 - `wiki_lint`
 
-The plugin also registers bundled skills. Hermes exposes plugin-bundled skills with a plugin namespace, so use the qualified names rather than the bare skill names:
+## 5. Install the wiki skills as native Hermes skills
 
-- `memory-wiki:wiki-maintainer`
-- `memory-wiki:wiki-authoring`
-- `memory-wiki:wiki-search`
+The plugin ships workflow skills for maintenance, authoring, and search. Install them into the native Hermes skills directory so `skills_list`, the injected available-skills context, and automatic skill-selection behavior can see them by bare name:
+
+```bash
+mkdir -p ~/.hermes/skills/memory-wiki
+cp -a src/hermes_memory_wiki/skills/wiki-* ~/.hermes/skills/memory-wiki/
+```
+
+For a development checkout, you can symlink them instead so edits are visible after `/reload-skills` or a fresh session:
+
+```bash
+mkdir -p ~/.hermes/skills/memory-wiki
+ln -s "$PWD/src/hermes_memory_wiki/skills/wiki-maintainer" ~/.hermes/skills/memory-wiki/wiki-maintainer
+ln -s "$PWD/src/hermes_memory_wiki/skills/wiki-authoring" ~/.hermes/skills/memory-wiki/wiki-authoring
+ln -s "$PWD/src/hermes_memory_wiki/skills/wiki-search" ~/.hermes/skills/memory-wiki/wiki-search
+```
+
+After installing or updating native skills, run `/reload-skills` in an existing Hermes session or start a fresh session. The native skill names should then be available as:
+
+- `wiki-maintainer`
+- `wiki-authoring`
+- `wiki-search`
 
 Examples:
 
 ```text
-/skill memory-wiki:wiki-maintainer
+/skill wiki-maintainer
 ```
 
 or, from an agent/tool context:
 
 ```text
-skill_view(name="memory-wiki:wiki-maintainer")
+skill_view(name="wiki-maintainer")
 ```
 
-If `wiki-maintainer`, `wiki-authoring`, or `wiki-search` are not found by their bare names, that is expected for plugin-bundled skills; retry with the `memory-wiki:` prefix. If the qualified names are not found after installation, restart the Hermes process that serves the session so plugin registrations are rediscovered.
+The plugin also registers bundled fallback skills. Hermes exposes plugin-bundled skills with a plugin namespace, so if you intentionally skip the native-skill install, use the qualified names:
 
-## 5. Initialize the vault
+- `memory-wiki:wiki-maintainer`
+- `memory-wiki:wiki-authoring`
+- `memory-wiki:wiki-search`
+
+Native-skill installation is recommended because current Hermes skill-listing/discovery may not surface plugin-bundled skills to the agent before a task begins.
+
+## 6. Initialize the vault
 
 The default vault path is:
 
@@ -162,7 +186,7 @@ To use a different vault for a one-off call, pass `vaultPath` to a tool invocati
 
 Current limitation: the user-plugin tool handlers do not automatically read `memory_wiki.vault_path` from Hermes config. Use the default vault path or pass `vaultPath` per tool call until config wiring is added; see [Configuration](configuration.md).
 
-## 6. Run the first reindex
+## 7. Run the first reindex
 
 For vector search, set `OPENAI_API_KEY` in the environment used to launch Hermes before reindexing:
 
@@ -184,7 +208,7 @@ For the first full rebuild, use:
 
 If you do not want vector embeddings today, do not set `OPENAI_API_KEY`, skip `wiki_reindex`, and use keyword search mode where available. Keyword search remains available without an API key. The Hermes config key `memory_wiki.embeddings.enabled` is part of the Python library config shape, but the current user-plugin handlers do not read it from Hermes config.
 
-## 7. Optional install verification
+## 8. Optional install verification
 
 Before enabling the plugin in a real Hermes profile, you can verify the checkout without touching `~/.hermes`:
 
