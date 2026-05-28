@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from textwrap import dedent
 
 import pytest
 
@@ -44,6 +45,12 @@ def _payload(result):
     assert payload["text"]
     assert isinstance(payload["details"], dict)
     return payload
+
+
+def _write_page(root: Path, relative_path: str, text: str) -> None:
+    path = root / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(dedent(text).lstrip(), encoding="utf-8")
 
 
 def test_register_registers_expected_memory_wiki_tools():
@@ -92,6 +99,42 @@ def test_wiki_status_handler_returns_basic_vault_status(tmp_path):
     assert payload["details"]["pageCount"] == 0
 
 
+def test_wiki_status_reports_openclaw_directory_cache_and_vector_state(tmp_path):
+    vault = tmp_path / "vault"
+    _registered_tools()["wiki_init"]["handler"]({"vaultPath": str(vault)})
+    _write_page(
+        vault,
+        "entities/alice.md",
+        """
+        ---
+        id: entity.alice
+        title: Alice
+        pageType: entity
+        entityType: person
+        ---
+        # Alice
+        """,
+    )
+
+    payload = _payload(_registered_tools()["wiki_status"]["handler"]({"vaultPath": str(vault)}))
+
+    assert payload["details"]["directories"] == {
+        "entities": True,
+        "concepts": True,
+        "syntheses": True,
+        "sources": True,
+        "reports": True,
+        "_attachments": True,
+        "_views": True,
+        ".hermes-wiki": True,
+        ".hermes-wiki/locks": True,
+        ".hermes-wiki/cache": True,
+        ".hermes-wiki/vector": True,
+    }
+    assert payload["details"]["cache"] == {"exists": True, "path": str(vault / ".hermes-wiki" / "cache")}
+    assert payload["details"]["vector"] == {"exists": True, "path": str(vault / ".hermes-wiki" / "vector")}
+
+
 def test_wiki_get_handler_calls_core_and_returns_page(monkeypatch, tmp_path):
     from hermes_memory_wiki import tools
 
@@ -110,6 +153,18 @@ def test_wiki_get_handler_calls_core_and_returns_page(monkeypatch, tmp_path):
             line_count=5,
             total_lines=9,
             truncated=True,
+            page=SimpleNamespace(
+                page_type="entity",
+                entity_type="person",
+                aliases=["Al"],
+                claims=[SimpleNamespace(id="claim.alice")],
+                source_ids=["source.one"],
+                questions=["What next?"],
+                contradictions=[],
+                confidence=0.9,
+                status="active",
+                updated_at="2026-05-28T00:00:00Z",
+            ),
         )
 
     monkeypatch.setattr(tools, "get_page", fake_get_page)
@@ -124,6 +179,11 @@ def test_wiki_get_handler_calls_core_and_returns_page(monkeypatch, tmp_path):
     assert payload["details"]["path"] == "entities/alice.md"
     assert payload["details"]["content"] == "Alice excerpt"
     assert payload["details"]["truncated"] is True
+    assert payload["details"]["pageType"] == "entity"
+    assert payload["details"]["entityType"] == "person"
+    assert payload["details"]["aliases"] == ["Al"]
+    assert payload["details"]["claimCount"] == 1
+    assert payload["details"]["questions"] == ["What next?"]
 
 
 def test_wiki_search_handler_calls_core_and_returns_results(monkeypatch, tmp_path):
@@ -170,7 +230,57 @@ def test_wiki_search_handler_calls_core_and_returns_results(monkeypatch, tmp_pat
 
     assert "1 result" in payload["text"]
     assert payload["details"]["results"][0]["path"] == "entities/alice.md"
+    assert payload["details"]["results"][0]["id"] is None
+    assert payload["details"]["results"][0]["pageType"] is None
     assert payload["details"]["diagnostics"]["effectiveMode"] == "keyword"
+
+
+def test_wiki_search_returns_openclaw_relevant_result_metadata(tmp_path):
+    vault = tmp_path / "vault"
+    _registered_tools()["wiki_init"]["handler"]({"vaultPath": str(vault)})
+    _write_page(
+        vault,
+        "entities/alice.md",
+        """
+        ---
+        id: entity.alice
+        title: Alice Example
+        pageType: entity
+        entityType: person
+        aliases: [Al]
+        sourceIds: [source.note]
+        confidence: 0.9
+        status: active
+        updatedAt: "2026-05-28T00:00:00Z"
+        claims:
+          - id: claim.alice.prefers-sources
+            text: Alice prefers source-backed wiki claims.
+            status: active
+            confidence: 0.8
+            evidence:
+              - kind: source
+                sourceId: source.note
+                path: sources/note.md
+        ---
+        # Alice Example
+        """,
+    )
+
+    payload = _payload(
+        _registered_tools()["wiki_search"]["handler"](
+            {"vaultPath": str(vault), "query": "source-backed wiki claims", "searchMode": "keyword"}
+        )
+    )
+    result = payload["details"]["results"][0]
+
+    assert result["corpus"] == "wiki"
+    assert result["kind"] == "entity"
+    assert result["id"] == "entity.alice"
+    assert result["pageType"] == "entity"
+    assert result["entityType"] == "person"
+    assert result["sourceIds"] == ["source.note"]
+    assert result["claimCount"] == 1
+    assert result["matchedClaimId"] == "claim.alice.prefers-sources"
 
 
 def test_wiki_apply_handler_normalizes_and_calls_core(monkeypatch, tmp_path):
@@ -202,6 +312,7 @@ def test_wiki_apply_handler_normalizes_and_calls_core(monkeypatch, tmp_path):
         "path": "syntheses/answer.md",
         "id": "synthesis.answer",
         "created": True,
+        "op": "create_synthesis",
     }
 
 
@@ -217,7 +328,7 @@ def test_wiki_apply_handler_normalizes_and_calls_core(monkeypatch, tmp_path):
                 claim_count=4,
                 updated_files=[Path("/vault/index.md")],
             ),
-            {"claimCount": 4, "updatedFileCount": 1},
+            {"claimCount": 4, "updatedFileCount": 1, "pageCounts": {"entity": 2}},
         ),
         (
             "wiki_lint",
@@ -230,8 +341,18 @@ def test_wiki_apply_handler_normalizes_and_calls_core(monkeypatch, tmp_path):
                 markdown_path=Path("/vault/.hermes-wiki/cache/lint-report.md"),
                 json_path=Path("/vault/.hermes-wiki/cache/lint-report.json"),
                 updated_files=[],
+                issues=[
+                    SimpleNamespace(category="structure", severity="error"),
+                    SimpleNamespace(category="provenance", severity="warning"),
+                    SimpleNamespace(category="quality", severity="issue"),
+                ],
             ),
-            {"issueCount": 3, "errorCount": 1, "warningCount": 2},
+            {
+                "issueCount": 3,
+                "errorCount": 1,
+                "warningCount": 2,
+                "categoryCounts": {"structure": 1, "provenance": 1, "quality": 1},
+            },
         ),
         (
             "wiki_reindex",
@@ -244,8 +365,9 @@ def test_wiki_apply_handler_normalizes_and_calls_core(monkeypatch, tmp_path):
                 model="fake-model",
                 dimensions=3,
                 diagnostics=[],
+                document_count=11,
             ),
-            {"embeddedCount": 5, "skippedCount": 6, "deletedCount": 1},
+            {"embeddedCount": 5, "skippedCount": 6, "deletedCount": 1, "documentCount": 11},
         ),
     ],
 )

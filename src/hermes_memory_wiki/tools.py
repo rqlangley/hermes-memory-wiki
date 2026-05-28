@@ -15,6 +15,19 @@ from hermes_memory_wiki.vault import METADATA_DIRECTORY, get_page, initialize_va
 from hermes_memory_wiki.vector_index import reindex_vault
 
 TOOLSET = "memory_wiki"
+STATUS_DIRECTORIES = [
+    "entities",
+    "concepts",
+    "syntheses",
+    "sources",
+    "reports",
+    "_attachments",
+    "_views",
+    METADATA_DIRECTORY,
+    f"{METADATA_DIRECTORY}/locks",
+    f"{METADATA_DIRECTORY}/cache",
+    f"{METADATA_DIRECTORY}/vector",
+]
 
 JsonDict = dict[str, Any]
 Handler = Callable[[Mapping[str, Any] | None], str]
@@ -148,6 +161,9 @@ def wiki_status(args: Mapping[str, Any] | None = None) -> str:
         "exists": root.exists(),
         "initialized": metadata_dir.is_dir(),
         "pageCount": len(pages),
+        "directories": {relative: (root / relative).is_dir() for relative in STATUS_DIRECTORIES},
+        "cache": {"exists": cache_dir.is_dir(), "path": str(cache_dir)},
+        "vector": {"exists": vector_dir.is_dir(), "path": str(vector_dir)},
         "cacheExists": cache_dir.is_dir(),
         "vectorExists": vector_dir.is_dir(),
     }
@@ -200,7 +216,11 @@ def wiki_get(args: Mapping[str, Any] | None = None) -> str:
         "kind": result.kind,
         "pageType": getattr(page, "page_type", None),
         "entityType": getattr(page, "entity_type", None),
+        "aliases": list(getattr(page, "aliases", [])),
         "sourceIds": list(getattr(page, "source_ids", [])),
+        "claimCount": len(getattr(page, "claims", [])),
+        "questions": list(getattr(page, "questions", [])),
+        "contradictions": list(getattr(page, "contradictions", [])),
         "confidence": getattr(page, "confidence", None),
         "status": getattr(page, "status", None),
         "updatedAt": getattr(page, "updated_at", None),
@@ -217,7 +237,7 @@ def wiki_apply(args: Mapping[str, Any] | None = None) -> str:
     raw = _args(args)
     mutation = normalize_mutation(raw)
     result = apply_mutation(_config(raw), mutation)
-    details = {"path": result.path, "id": result.id, "created": result.created}
+    details = {"path": result.path, "id": result.id, "created": result.created, "op": getattr(mutation, "type", raw.get("op"))}
     return _response(f"Applied memory wiki mutation to {result.path}.", details)
 
 
@@ -240,6 +260,7 @@ def wiki_reindex(args: Mapping[str, Any] | None = None) -> str:
         "embeddedCount": result.embedded_count,
         "skippedCount": result.skipped_count,
         "deletedCount": result.deleted_count,
+        "documentCount": getattr(result, "document_count", result.embedded_count + result.skipped_count),
         "provider": result.provider,
         "model": result.model,
         "dimensions": result.dimensions,
@@ -255,6 +276,8 @@ def wiki_lint(args: Mapping[str, Any] | None = None) -> str:
         "issueCount": result.issue_count,
         "errorCount": result.error_count,
         "warningCount": result.warning_count,
+        "categoryCounts": _issue_counts(result.issues, "category"),
+        "severityCounts": _issue_counts(result.issues, "severity"),
         "markdownPath": str(result.markdown_path),
         "jsonPath": str(result.json_path),
         "updatedFiles": _paths(result.updated_files),
@@ -284,14 +307,51 @@ def _paths(paths: list[Path]) -> list[str]:
 
 
 def _search_result(result: Any) -> JsonDict:
+    metadata = dict(result.metadata)
     return {
         "corpus": result.corpus,
         "path": result.path,
         "title": result.title,
         "kind": result.kind,
+        "id": _metadata_value(metadata, "id", "page_id"),
+        "pageType": _metadata_value(metadata, "pageType", "page_type"),
+        "entityType": _metadata_value(metadata, "entityType", "entity_type"),
+        "sourceIds": _metadata_list(metadata, "sourceIds", "source_ids", "page_source_ids"),
+        "claimCount": _metadata_value(metadata, "claimCount", "claim_count"),
+        "confidence": _metadata_value(metadata, "confidence"),
+        "status": _metadata_value(metadata, "status"),
+        "updatedAt": _metadata_value(metadata, "updatedAt", "updated_at"),
         "score": result.score,
         "snippet": result.snippet,
         "searchMode": result.search_mode,
         "matchedClaimId": result.matched_claim_id,
-        "metadata": dict(result.metadata),
+        "metadata": metadata,
     }
+
+
+def _metadata_value(metadata: Mapping[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in metadata:
+            return metadata[key]
+    return None
+
+
+def _metadata_list(metadata: Mapping[str, Any], *keys: str) -> list[Any]:
+    value = _metadata_value(metadata, *keys)
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def _issue_counts(issues: list[Any], field_name: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for issue in issues:
+        value = getattr(issue, field_name, None)
+        if value is None and isinstance(issue, Mapping):
+            value = issue.get(field_name)
+        if value:
+            key = str(value)
+            counts[key] = counts.get(key, 0) + 1
+    return counts
