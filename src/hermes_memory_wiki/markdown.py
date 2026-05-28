@@ -7,10 +7,10 @@ from typing import Any
 import yaml
 
 
-HERMES_GENERATED_START = "<!-- hermes-wiki:generated:start -->"
-HERMES_GENERATED_END = "<!-- hermes-wiki:generated:end -->"
-HERMES_HUMAN_START = "<!-- hermes-wiki:human:start -->"
-HERMES_HUMAN_END = "<!-- hermes-wiki:human:end -->"
+HERMES_GENERATED_START = "<!-- hermes:wiki:generated:start -->"
+HERMES_GENERATED_END = "<!-- hermes:wiki:generated:end -->"
+HERMES_HUMAN_START = "<!-- hermes:human:start -->"
+HERMES_HUMAN_END = "<!-- hermes:human:end -->"
 
 OPENCLAW_GENERATED_START = "<!-- openclaw:wiki:generated:start -->"
 OPENCLAW_GENERATED_END = "<!-- openclaw:wiki:generated:end -->"

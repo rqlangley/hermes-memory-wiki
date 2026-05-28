@@ -52,7 +52,8 @@ def _tool_specs() -> list[JsonDict]:
                     **_vault_path_property(),
                     "query": {"type": "string", "minLength": 1},
                     "maxResults": {"type": "integer", "minimum": 1, "default": 10},
-                    "searchMode": {"type": "string", "enum": ["auto", "keyword", "vector", "hybrid"]},
+                    "mode": {"type": "string", "enum": ["auto", "find-person", "route-question", "source-evidence", "raw-claim"], "default": "auto"},
+                    "searchMode": {"type": "string", "enum": ["keyword", "vector", "hybrid"]},
                 },
                 required=["query"],
             ),
@@ -66,7 +67,7 @@ def _tool_specs() -> list[JsonDict]:
                     **_vault_path_property(),
                     "lookup": {"type": "string", "minLength": 1},
                     "fromLine": {"type": "integer", "minimum": 1, "default": 1},
-                    "lineCount": {"type": "integer", "minimum": 0, "default": 200},
+                    "lineCount": {"type": "integer", "minimum": 1, "default": 200},
                 },
                 required=["lookup"],
             ),
@@ -78,18 +79,16 @@ def _tool_specs() -> list[JsonDict]:
             _schema(
                 {
                     **_vault_path_property(),
-                    "op": {"type": "string", "minLength": 1},
+                    "op": {"type": "string", "enum": ["create_synthesis", "update_metadata"]},
                     "lookup": {"type": "string"},
                     "title": {"type": "string"},
                     "body": {"type": "string"},
                     "sourceIds": {"type": "array", "items": {"type": "string"}},
-                    "claims": {"type": "array", "items": {"type": "object"}},
+                    "claims": {"type": "array", "items": _claim_schema()},
                     "questions": {"type": "array", "items": {"type": "string"}},
                     "contradictions": {"type": "array", "items": {"type": "string"}},
-                    "confidence": {"type": "number"},
+                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
                     "status": {"type": "string"},
-                    "path": {"type": "string"},
-                    "id": {"type": "string"},
                 },
                 required=["op"],
             ),
@@ -124,10 +123,45 @@ def _accept_runtime_kwargs(handler: Handler) -> HermesHandler:
 
 
 def _schema(properties: JsonDict, *, required: list[str] | None = None) -> JsonDict:
-    schema: JsonDict = {"type": "object", "properties": properties, "additionalProperties": True}
+    schema: JsonDict = {"type": "object", "properties": properties, "additionalProperties": False}
     if required:
         schema["required"] = required
     return schema
+
+
+def _claim_schema() -> JsonDict:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["text"],
+        "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string", "minLength": 1},
+            "status": {"type": "string"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "updatedAt": {"type": "string"},
+            "evidence": {"type": "array", "items": _evidence_schema()},
+        },
+    }
+
+
+def _evidence_schema() -> JsonDict:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "kind": {"type": "string"},
+            "sourceId": {"type": "string"},
+            "path": {"type": "string"},
+            "lines": {"type": "string"},
+            "confidence": {"type": "number"},
+            "weight": {"type": "number"},
+            "privacyTier": {"type": "string"},
+            "updatedAt": {"type": "string"},
+            "note": {"type": "string"},
+            "text": {"type": "string"},
+        },
+    }
 
 
 def _vault_path_property() -> JsonDict:
@@ -235,9 +269,23 @@ def wiki_get(args: Mapping[str, Any] | None = None) -> str:
 
 def wiki_apply(args: Mapping[str, Any] | None = None) -> str:
     raw = _args(args)
+    config = _config(raw)
+    initialize_vault(config)
     mutation = normalize_mutation(raw)
-    result = apply_mutation(_config(raw), mutation)
-    details = {"path": result.path, "id": result.id, "created": result.created, "op": getattr(mutation, "type", raw.get("op"))}
+    result = apply_mutation(config, mutation)
+    compile_result = compile_vault(config)
+    details = {
+        "path": result.path,
+        "id": result.id,
+        "created": result.created,
+        "op": getattr(mutation, "type", raw.get("op")),
+        "compile": {
+            "pageCounts": dict(compile_result.page_counts),
+            "claimCount": compile_result.claim_count,
+            "updatedFiles": _paths(compile_result.updated_files),
+            "updatedFileCount": len(compile_result.updated_files),
+        },
+    }
     return _response(f"Applied memory wiki mutation to {result.path}.", details)
 
 

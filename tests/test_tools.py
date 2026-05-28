@@ -75,6 +75,29 @@ def test_schemas_require_fields_where_relevant():
         assert "required" not in tools[name]["schema"] or tools[name]["schema"]["required"] == []
 
 
+def test_tool_schemas_are_strict_and_openclaw_compatible():
+    tools = _registered_tools()
+
+    for entry in tools.values():
+        assert entry["schema"]["additionalProperties"] is False
+
+    search_props = tools["wiki_search"]["schema"]["properties"]
+    assert search_props["mode"]["enum"] == ["auto", "find-person", "route-question", "source-evidence", "raw-claim"]
+    assert search_props["searchMode"]["enum"] == ["keyword", "vector", "hybrid"]
+    assert tools["wiki_get"]["schema"]["properties"]["lineCount"]["minimum"] == 1
+
+    apply_props = tools["wiki_apply"]["schema"]["properties"]
+    assert apply_props["op"]["enum"] == ["create_synthesis", "update_metadata"]
+    claim_schema = apply_props["claims"]["items"]
+    assert claim_schema["required"] == ["text"]
+    assert claim_schema["additionalProperties"] is False
+    assert claim_schema["properties"]["confidence"] == {"type": "number", "minimum": 0, "maximum": 1}
+    evidence_schema = claim_schema["properties"]["evidence"]["items"]
+    assert evidence_schema["additionalProperties"] is False
+    assert evidence_schema["properties"]["sourceId"] == {"type": "string"}
+    assert evidence_schema["properties"]["lines"] == {"type": "string"}
+
+
 def test_wiki_init_handler_returns_text_and_details(tmp_path):
     handler = _registered_tools()["wiki_init"]["handler"]
 
@@ -297,8 +320,18 @@ def test_wiki_apply_handler_normalizes_and_calls_core(monkeypatch, tmp_path):
         assert mutation == "normalized"
         return SimpleNamespace(path="syntheses/answer.md", id="synthesis.answer", created=True)
 
+    def fake_init(config):
+        calls["initialized"] = config.vault_path
+        return SimpleNamespace(root=config.vault_path, created=False, created_directories=[], created_files=[])
+
+    def fake_compile(config):
+        calls["compiled"] = config.vault_path
+        return SimpleNamespace(vault_root=config.vault_path, page_counts={"synthesis": 1}, claim_count=0, updated_files=[])
+
     monkeypatch.setattr(tools, "normalize_mutation", fake_normalize)
     monkeypatch.setattr(tools, "apply_mutation", fake_apply)
+    monkeypatch.setattr(tools, "initialize_vault", fake_init)
+    monkeypatch.setattr(tools, "compile_vault", fake_compile)
 
     payload = _payload(
         _registered_tools()["wiki_apply"]["handler"](
@@ -308,11 +341,14 @@ def test_wiki_apply_handler_normalizes_and_calls_core(monkeypatch, tmp_path):
 
     assert calls["raw"]["op"] == "create_synthesis"
     assert "applied" in payload["text"].lower()
+    assert calls["initialized"] == tmp_path
+    assert calls["compiled"] == tmp_path
     assert payload["details"] == {
         "path": "syntheses/answer.md",
         "id": "synthesis.answer",
         "created": True,
         "op": "create_synthesis",
+        "compile": {"pageCounts": {"synthesis": 1}, "claimCount": 0, "updatedFiles": [], "updatedFileCount": 0},
     }
 
 

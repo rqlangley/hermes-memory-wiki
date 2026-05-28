@@ -265,6 +265,15 @@ def _digest_page(page: WikiPageSummary) -> dict[str, Any]:
     for key, value in optional_fields.items():
         if value is not None:
             record[key] = value
+    if page.person_card is not None:
+        record["personCard"] = {
+            "name": page.person_card.name,
+            "role": page.person_card.role,
+            "bestUsedFor": list(page.person_card.best_used_for),
+            "topics": list(page.person_card.topics),
+            "routing": dict(page.person_card.routing),
+            "routes": list(page.person_card.routes),
+        }
     if page.claims:
         record["topClaims"] = [_claim_digest_record(claim) for claim in page.claims[:5]]
     return record

@@ -71,8 +71,6 @@ def normalize_mutation(raw: Mapping[str, Any]) -> WikiMutation:
         contradictions=_string_list(raw.get("contradictions")),
         confidence=_optional_confidence(raw.get("confidence")),
         status=_optional_string(raw.get("status")) or "active",
-        path=_optional_string(raw.get("path")),
-        id=_optional_string(raw.get("id")),
     )
 
 
@@ -150,8 +148,8 @@ def _apply_update_metadata(config: MemoryWikiConfig, mutation: WikiMutation) -> 
 
 def _apply_create_synthesis(config: MemoryWikiConfig, mutation: WikiMutation) -> ApplyResult:
     slug = _slugify(mutation.title)
-    relative_path = mutation.path or f"syntheses/{slug}.md"
-    page_id = mutation.id or f"synthesis.{PurePosixPath(relative_path).stem}"
+    relative_path = f"syntheses/{slug}.md"
+    page_id = f"synthesis.{slug}"
     path = safe_join(config.vault_path, relative_path)
     display_path = to_display_path(config.vault_path, path)
     _validate_synthesis_path(display_path)
@@ -161,7 +159,9 @@ def _apply_create_synthesis(config: MemoryWikiConfig, mutation: WikiMutation) ->
     if path.exists():
         if not path.is_file():
             raise IsADirectoryError(f"wiki page path exists and is not a file: {path}")
-        existing_body = parse_wiki_markdown(path.read_text(encoding="utf-8")).body
+        existing_doc = parse_wiki_markdown(path.read_text(encoding="utf-8"))
+        existing_body = existing_doc.body
+        page_id = _optional_string(existing_doc.frontmatter.get("id")) or page_id
     else:
         path.parent.mkdir(parents=True, exist_ok=True)
         existing_body = f"# {mutation.title}\n"
@@ -261,9 +261,57 @@ def _claims(value: Any) -> list[dict[str, Any]]:
     claims: list[dict[str, Any]] = []
     for item in values:
         if not isinstance(item, Mapping):
-            continue
-        claims.append(dict(item))
+            raise ValueError("claim must be an object")
+        text = _optional_string(item.get("text"))
+        if text is None:
+            raise ValueError("claim text is required")
+        claim: dict[str, Any] = {"text": text}
+        for key in ("id", "status", "updatedAt"):
+            if key in item:
+                string_value = _optional_string(item.get(key))
+                if string_value is not None:
+                    claim[key] = string_value
+        if "confidence" in item:
+            try:
+                claim["confidence"] = _optional_confidence(item.get("confidence"))
+            except ValueError as exc:
+                raise ValueError("claim confidence must be a number between 0 and 1") from exc
+        if "evidence" in item:
+            claim["evidence"] = _evidence_list(item.get("evidence"))
+        claims.append(claim)
     return claims
+
+
+def _evidence_list(value: Any) -> list[dict[str, Any]]:
+    if value is None:
+        return []
+    values = value if isinstance(value, list) else [value]
+    evidence_items: list[dict[str, Any]] = []
+    for item in values:
+        if not isinstance(item, Mapping):
+            raise ValueError("evidence must be an object")
+        evidence: dict[str, Any] = {}
+        for key in ("kind", "sourceId", "path", "note", "text", "privacyTier", "updatedAt"):
+            if key in item:
+                value_text = item.get(key)
+                if not isinstance(value_text, str):
+                    raise ValueError(f"evidence {key} must be a string")
+                if value_text.strip():
+                    evidence[key] = value_text.strip()
+        if "lines" in item:
+            lines = item.get("lines")
+            if not isinstance(lines, str):
+                raise ValueError("evidence lines must be a string")
+            if lines.strip():
+                evidence["lines"] = lines.strip()
+        for key in ("confidence", "weight"):
+            if key in item:
+                numeric_value = item.get(key)
+                if isinstance(numeric_value, bool) or not isinstance(numeric_value, (int, float)) or not math.isfinite(numeric_value):
+                    raise ValueError(f"evidence {key} must be a number")
+                evidence[key] = numeric_value
+        evidence_items.append(evidence)
+    return evidence_items
 
 
 def _slugify(title: str) -> str:

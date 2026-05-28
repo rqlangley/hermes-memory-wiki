@@ -116,13 +116,22 @@ def to_page_summary(relative_path: str, raw: str) -> WikiPageSummary | None:
     title = _first_nonempty_string(frontmatter.get("title"), _extract_h1(doc.body), _title_from_path(relative_path))
     page_id = _first_nonempty_string(frontmatter.get("id"), f"{kind}:{_stem_slug(relative_path)}")
 
-    best_used_for = _string_list(frontmatter.get("bestUsedFor")) + _string_list(frontmatter.get("best_used_for"))
+    person_card_mapping = _dict_mapping(frontmatter.get("personCard"))
+    if person_card_mapping:
+        best_used_for = _string_list(person_card_mapping.get("bestUsedFor"))
+        topics = _string_list(person_card_mapping.get("topics"))
+        routing = _dict_mapping(person_card_mapping.get("routing"))
+        routes = _string_list(person_card_mapping.get("routes"))
+        person = _optional_string(person_card_mapping.get("name"))
+        role = _optional_string(person_card_mapping.get("role"))
+    else:
+        best_used_for = _string_list(frontmatter.get("bestUsedFor"))
+        topics = _string_list(frontmatter.get("topics"))
+        routing = _dict_mapping(frontmatter.get("routing"))
+        routes = _string_list(frontmatter.get("routes"))
+        person = _optional_string(frontmatter.get("person"))
+        role = _optional_string(frontmatter.get("role"))
     not_enough_for = _string_list(frontmatter.get("notEnoughFor"))
-    routing = _dict_mapping(frontmatter.get("routing"))
-    routes = _string_list(frontmatter.get("routes"))
-    topics = _string_list(frontmatter.get("topics"))
-    person = _optional_string(frontmatter.get("person"))
-    role = _optional_string(frontmatter.get("role"))
     person_card = None
     if any([person, role, best_used_for, topics, routing, routes]):
         person_card = PersonCard(
@@ -142,7 +151,7 @@ def to_page_summary(relative_path: str, raw: str) -> WikiPageSummary | None:
         page_type=_optional_string(frontmatter.get("pageType")),
         entity_type=_optional_string(frontmatter.get("entityType")),
         canonical_id=_optional_string(frontmatter.get("canonicalId")),
-        source_ids=_string_list(_first_present(frontmatter, "sourceIds", "source_ids", "sourceId", "source_id")),
+        source_ids=_string_list(frontmatter.get("sourceIds")),
         aliases=_string_list(frontmatter.get("aliases")),
         claims=_claims(frontmatter.get("claims")),
         questions=_text_list(frontmatter.get("questions")),
@@ -150,7 +159,7 @@ def to_page_summary(relative_path: str, raw: str) -> WikiPageSummary | None:
         status=_optional_string(frontmatter.get("status")),
         confidence=frontmatter.get("confidence"),
         privacy_tier=_optional_string(frontmatter.get("privacyTier")),
-        updated_at=_optional_string(_first_present(frontmatter, "updated_at", "updatedAt")),
+        updated_at=_optional_string(frontmatter.get("updatedAt")),
         relationships=_list_value(frontmatter.get("relationships")),
         not_enough_for=not_enough_for,
         source_type=_optional_string(frontmatter.get("sourceType")),
@@ -273,8 +282,8 @@ def _evidence_list(value: Any) -> list[WikiEvidence]:
         raw = dict(item)
         evidence_items.append(
             WikiEvidence(
-                kind=_optional_string(item.get("kind") or item.get("type")),
-                source_id=_optional_string(_first_present(item, "source_id", "sourceId")),
+                kind=_optional_string(item.get("kind")),
+                source_id=_optional_string(item.get("sourceId")),
                 path=_optional_string(item.get("path")),
                 lines=_list_value(item.get("lines")),
                 confidence=item.get("confidence"),

@@ -28,7 +28,7 @@ EXPECTED_SKILLS = ["wiki-maintainer", "wiki-authoring", "wiki-search"]
 EXPECTED_SCHEMA_PROPERTIES = {
     "wiki_init": {"vaultPath"},
     "wiki_status": {"vaultPath"},
-    "wiki_search": {"vaultPath", "query", "maxResults", "searchMode"},
+    "wiki_search": {"vaultPath", "query", "maxResults", "mode", "searchMode"},
     "wiki_get": {"vaultPath", "lookup", "fromLine", "lineCount"},
     "wiki_apply": {
         "vaultPath",
@@ -42,8 +42,6 @@ EXPECTED_SCHEMA_PROPERTIES = {
         "contradictions",
         "confidence",
         "status",
-        "path",
-        "id",
     },
     "wiki_compile": {"vaultPath"},
     "wiki_reindex": {"vaultPath", "force"},

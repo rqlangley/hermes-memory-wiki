@@ -150,20 +150,63 @@ def test_normalize_create_synthesis_accepts_valid_confidence(confidence):
     assert mutation.confidence == confidence
 
 
+def test_create_synthesis_ignores_public_path_and_id_overrides(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+
+    result = apply_mutation(config, normalize_mutation(_base_raw(path="syntheses/custom.md", id="custom.id")))
+
+    assert result.path == "syntheses/project-alpha-memory-rag.md"
+    assert result.id == "synthesis.project-alpha-memory-rag"
+    assert not (config.vault_path / "syntheses" / "custom.md").exists()
+
+
+def test_create_synthesis_preserves_existing_id_when_overwriting(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    first = apply_mutation(config, normalize_mutation(_base_raw()))
+    page_path = config.vault_path / first.path
+    text = page_path.read_text(encoding="utf-8").replace("id: synthesis.project-alpha-memory-rag", "id: synthesis.existing")
+    page_path.write_text(text, encoding="utf-8")
+
+    result = apply_mutation(config, normalize_mutation(_base_raw(body="Updated.")))
+
+    assert result.created is False
+    assert result.id == "synthesis.existing"
+    doc = parse_wiki_markdown(page_path.read_text(encoding="utf-8"))
+    assert doc.frontmatter["id"] == "synthesis.existing"
+
+
 @pytest.mark.parametrize(
-    "path",
+    "claims,match",
     [
-        "syntheses/foo.txt",
-        "syntheses/nested/foo.md",
-        "notes/foo.md",
+        ([{"id": "missing-text"}], "claim text is required"),
+        ([{"text": "Bad confidence", "confidence": 2}], "claim confidence"),
+        ([{"text": "Bad evidence", "evidence": [{"kind": 42}]}], "evidence kind"),
+        ([{"text": "Bad evidence", "evidence": [{"sourceId": 42}]}], "evidence sourceId"),
+        ([{"text": "Bad evidence", "evidence": [{"lines": [1, 2]}]}], "evidence lines"),
     ],
 )
-def test_create_synthesis_rejects_explicit_non_queryable_path(tmp_path, path):
-    initialize_vault(_config(tmp_path / "vault"))
-    mutation = normalize_mutation(_base_raw(path=path))
+def test_normalize_create_synthesis_rejects_malformed_claims_and_evidence(claims, match):
+    with pytest.raises(ValueError, match=match):
+        normalize_mutation(_base_raw(claims=claims))
 
-    with pytest.raises(ValueError, match=r"syntheses/<name>\.md"):
-        apply_mutation(_config(tmp_path / "vault"), mutation)
+
+def test_normalize_create_synthesis_accepts_structured_claim_evidence_fields():
+    mutation = normalize_mutation(
+        _base_raw(
+            claims=[
+                {
+                    "id": "claim.one",
+                    "text": "A supported claim.",
+                    "confidence": 0.5,
+                    "evidence": [{"kind": "source", "sourceId": "source.one", "lines": "1-3"}],
+                }
+            ]
+        )
+    )
+
+    assert mutation.claims[0]["evidence"][0] == {"kind": "source", "sourceId": "source.one", "lines": "1-3"}
 
 
 def test_create_synthesis_writes_generated_summary_and_human_notes_blocks(tmp_path):
@@ -213,15 +256,6 @@ def test_create_synthesis_preserves_human_notes_on_update(tmp_path):
     assert "Project Alpha uses retrieval augmented memory." not in doc.body
     assert "Keep this hand-written note." in doc.body
     assert doc.frontmatter["status"] == "published"
-
-
-def test_create_synthesis_rejects_explicit_path_outside_vault(tmp_path):
-    initialize_vault(_config(tmp_path / "vault"))
-
-    mutation = normalize_mutation(_base_raw(path="../outside.md"))
-
-    with pytest.raises(ValueError, match="outside vault"):
-        apply_mutation(_config(tmp_path / "vault"), mutation)
 
 
 def _update_raw(**overrides):

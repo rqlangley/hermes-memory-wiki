@@ -755,6 +755,23 @@ def build_search_documents(pages: Sequence[WikiPageSummary]) -> list[SearchDocum
     documents: list[SearchDocument] = []
     for page in pages:
         page_text = _build_page_text(page)
+        page_metadata = {
+            "page_id": page.id,
+            "kind": page.kind,
+            "page_type": page.page_type,
+            "entity_type": page.entity_type,
+            "source_ids": list(page.source_ids),
+            "aliases": list(page.aliases),
+            "confidence": page.confidence,
+            "status": page.status,
+            "updated_at": page.updated_at,
+            "claim_count": len(page.claims),
+            "question_count": len(page.questions),
+            "contradiction_count": len(page.contradictions),
+        }
+        person_card_metadata = _person_card_metadata(page)
+        if person_card_metadata is not None:
+            page_metadata["person_card"] = person_card_metadata
         documents.append(
             SearchDocument(
                 id=f"page:{page.path}",
@@ -764,26 +781,31 @@ def build_search_documents(pages: Sequence[WikiPageSummary]) -> list[SearchDocum
                 doc_type="page",
                 text=page_text,
                 text_hash=_text_hash(page_text),
-                metadata={
-                    "page_id": page.id,
-                    "kind": page.kind,
-                    "page_type": page.page_type,
-                    "entity_type": page.entity_type,
-                    "source_ids": list(page.source_ids),
-                    "aliases": list(page.aliases),
-                    "confidence": page.confidence,
-                    "status": page.status,
-                    "updated_at": page.updated_at,
-                    "claim_count": len(page.claims),
-                    "question_count": len(page.questions),
-                    "contradiction_count": len(page.contradictions),
-                },
+                metadata=page_metadata,
             )
         )
 
         for ordinal, claim in enumerate(page.claims):
             claim_id = _claim_document_id(page, claim, ordinal)
             claim_text = _build_claim_text(page, claim, ordinal)
+            claim_metadata = {
+                "page_id": page.id,
+                "kind": page.kind,
+                "page_type": page.page_type,
+                "entity_type": page.entity_type,
+                "source_ids": list(page.source_ids),
+                "confidence": page.confidence,
+                "updated_at": page.updated_at,
+                "claim_id": claim.id,
+                "claim_ordinal": ordinal,
+                "status": claim.status,
+                "confidence": claim.confidence,
+                "page_source_ids": list(page.source_ids),
+                "evidence": [_evidence_metadata(evidence) for evidence in claim.evidence],
+            }
+            person_card_metadata = _person_card_metadata(page)
+            if person_card_metadata is not None:
+                claim_metadata["person_card"] = person_card_metadata
             documents.append(
                 SearchDocument(
                     id=claim_id,
@@ -793,21 +815,7 @@ def build_search_documents(pages: Sequence[WikiPageSummary]) -> list[SearchDocum
                     doc_type="claim",
                     text=claim_text,
                     text_hash=_text_hash(claim_text),
-                    metadata={
-                        "page_id": page.id,
-                        "kind": page.kind,
-                        "page_type": page.page_type,
-                        "entity_type": page.entity_type,
-                        "source_ids": list(page.source_ids),
-                        "confidence": page.confidence,
-                        "updated_at": page.updated_at,
-                        "claim_id": claim.id,
-                        "claim_ordinal": ordinal,
-                        "status": claim.status,
-                        "confidence": claim.confidence,
-                        "page_source_ids": list(page.source_ids),
-                        "evidence": [_evidence_metadata(evidence) for evidence in claim.evidence],
-                    },
+                    metadata=claim_metadata,
                 )
             )
     return documents
@@ -895,6 +903,19 @@ def _evidence_metadata(evidence: WikiEvidence) -> dict[str, Any]:
         "confidence": evidence.confidence,
         "note": evidence.note,
         "text": evidence.text,
+    }
+
+
+def _person_card_metadata(page: WikiPageSummary) -> dict[str, Any] | None:
+    if page.person_card is None:
+        return None
+    return {
+        "name": page.person_card.name,
+        "role": page.person_card.role,
+        "bestUsedFor": list(page.person_card.best_used_for),
+        "topics": list(page.person_card.topics),
+        "routing": dict(page.person_card.routing),
+        "routes": list(page.person_card.routes),
     }
 
 

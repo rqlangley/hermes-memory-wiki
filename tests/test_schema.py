@@ -27,7 +27,7 @@ sourceIds: interview-1
 aliases: Countess of Lovelace
 status: draft
 confidence: 0.75
-updated_at: 2026-05-27
+updatedAt: 2026-05-27
 ---
 # Body Heading
 
@@ -134,7 +134,6 @@ person: Ada Lovelace
 role: Mathematician
 bestUsedFor:
   - computing history
-best_used_for: analysis routing
 routing:
   priority: high
 routes:
@@ -153,13 +152,79 @@ topics: algorithms
     assert summary.entity_type == "person"
     assert summary.person == "Ada Lovelace"
     assert summary.role == "Mathematician"
-    assert summary.best_used_for == ["computing history", "analysis routing"]
+    assert summary.best_used_for == ["computing history"]
     assert summary.routing == {"priority": "high"}
     assert summary.routes == ["math", "history"]
     assert summary.topics == ["algorithms"]
     assert summary.person_card is not None
     assert summary.person_card.name == "Ada Lovelace"
     assert summary.person_card.role == "Mathematician"
+
+
+def test_person_card_mapping_preferred_over_legacy_top_level_fields():
+    raw = """---
+person: Legacy Name
+role: Legacy Role
+bestUsedFor: legacy routing
+topics: legacy-topic
+routing:
+  legacy: route
+routes: legacy-route
+personCard:
+  name: Ada Lovelace
+  role: Mathematician
+  bestUsedFor:
+    - computing history
+  topics:
+    - algorithms
+  routing:
+    priority: high
+  routes:
+    - math
+---
+# Ada
+"""
+
+    summary = to_page_summary("entities/ada.md", raw)
+
+    assert summary is not None
+    assert summary.person == "Ada Lovelace"
+    assert summary.role == "Mathematician"
+    assert summary.best_used_for == ["computing history"]
+    assert summary.topics == ["algorithms"]
+    assert summary.routing == {"priority": "high"}
+    assert summary.routes == ["math"]
+    assert summary.person_card is not None
+    assert summary.person_card.name == "Ada Lovelace"
+
+
+def test_legacy_aliases_are_not_parsed_as_openclaw_fields():
+    raw = """---
+title: Strict Fields
+source_ids: legacy-source
+sourceId: legacy-source-id
+source_id: legacy-source-underscore
+updated_at: 2026-05-27
+best_used_for: legacy routing
+claims:
+  - id: c1
+    text: Strict claim.
+    evidence:
+      - type: source
+        source_id: legacy-evidence-source
+---
+Body
+"""
+
+    summary = to_page_summary("concepts/strict.md", raw)
+
+    assert summary is not None
+    assert summary.source_ids == []
+    assert summary.updated_at is None
+    assert summary.best_used_for == []
+    assert summary.person_card is None
+    assert summary.claims[0].evidence[0].kind is None
+    assert summary.claims[0].evidence[0].source_id is None
 
 
 def test_entity_page_type_person_remains_broad_kind_entity_with_subtype_separate():

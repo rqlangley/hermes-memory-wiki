@@ -160,6 +160,17 @@ OpenClaw human note.
     assert ensure_human_notes_block(original) == original
 
 
+def test_emitted_markers_use_approved_hermes_wiki_constants():
+    body = replace_managed_block("# Note\n", "Managed", "Generated text.")
+    body = ensure_human_notes_block(body)
+
+    assert "<!-- hermes:wiki:generated:start -->" in body
+    assert "<!-- hermes:wiki:generated:end -->" in body
+    assert "<!-- hermes:human:start -->" in body
+    assert "<!-- hermes:human:end -->" in body
+    assert "hermes-wiki:" not in body
+
+
 def test_ensure_human_notes_block_adds_missing_human_notes_block():
     body = f"""{HERMES_GENERATED_START}
 ## Managed
