@@ -771,7 +771,7 @@ def build_search_documents(pages: Sequence[WikiPageSummary]) -> list[SearchDocum
         }
         person_card_metadata = _person_card_metadata(page)
         if person_card_metadata is not None:
-            page_metadata["person_card"] = person_card_metadata
+            page_metadata["personCard"] = person_card_metadata
         documents.append(
             SearchDocument(
                 id=f"page:{page.path}",
@@ -805,7 +805,7 @@ def build_search_documents(pages: Sequence[WikiPageSummary]) -> list[SearchDocum
             }
             person_card_metadata = _person_card_metadata(page)
             if person_card_metadata is not None:
-                claim_metadata["person_card"] = person_card_metadata
+                claim_metadata["personCard"] = person_card_metadata
             documents.append(
                 SearchDocument(
                     id=claim_id,
