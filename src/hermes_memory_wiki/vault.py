@@ -22,16 +22,74 @@ _REQUIRED_DIRECTORIES = [
     Path("concepts"),
     Path("syntheses"),
     Path("reports"),
+    Path("_attachments"),
+    Path("_views"),
     Path(METADATA_DIRECTORY),
+    Path(METADATA_DIRECTORY) / "locks",
     Path(METADATA_DIRECTORY) / "cache",
     Path(METADATA_DIRECTORY) / "vector",
 ]
 
 _STARTER_FILES = {
-    Path("AGENTS.md"): "# Hermes Memory Wiki Agents\n\nGuidance for agents working with this vault.\n",
-    Path("WIKI.md"): "# Hermes Memory Wiki\n\nThis vault stores durable memory as linked Markdown pages.\n",
-    Path("index.md"): "# Memory Wiki Index\n\n- [Inbox](inbox.md)\n- [Sources](sources/)\n- [Entities](entities/)\n- [Concepts](concepts/)\n- [Syntheses](syntheses/)\n- [Reports](reports/)\n",
-    Path("inbox.md"): "# Inbox\n\nCapture unsorted notes here before promoting them into wiki pages.\n",
+    Path("AGENTS.md"): """# Memory Wiki Agent Guide
+
+- Treat generated blocks as plugin-owned.
+- Preserve human notes outside managed markers.
+- Prefer source-backed claims over wiki-to-wiki citation loops.
+- Prefer structured `claims` with evidence over burying key beliefs only in prose.
+- Use `.hermes-wiki/cache/agent-digest.json` and `claims.jsonl` for machine reads; markdown pages are the human view.
+- Keep broad page kinds in `pageType`; `entityType`, not `pageType`, stores the entity subtype such as person, organization, project, or system.
+- Generated markers are `<!-- hermes:wiki:generated:start -->` / `<!-- hermes:wiki:generated:end -->`.
+- Human notes belong outside managed regions or inside `<!-- hermes:human:start -->` / `<!-- hermes:human:end -->` blocks.
+- Lint output belongs in `<!-- hermes:wiki:lint:start -->` / `<!-- hermes:wiki:lint:end -->` blocks.
+""",
+    Path("WIKI.md"): """# Memory Wiki
+
+This vault is maintained by the Hermes memory-wiki plugin.
+
+## Architecture
+
+- Raw sources remain the evidence layer.
+- Wiki pages are the human-readable synthesis layer.
+- `.hermes-wiki/cache/agent-digest.json` is the agent-facing compiled digest.
+- `.hermes-wiki/cache/claims.jsonl` is the structured claim stream for machine reads.
+- Markdown pages are the editable human view; generated blocks are plugin-owned.
+- `.hermes-wiki/vector/` is a Hermes extension for local vector search over the same corpus.
+
+## Taxonomy
+
+- `sources/` stores source pages with `pageType: source`.
+- `entities/` stores entity pages with `pageType: entity`; use `entityType` for subtypes such as person, organization, project, or system.
+- `concepts/` stores concept pages with `pageType: concept`.
+- `syntheses/` stores synthesis pages with `pageType: synthesis`.
+- `reports/` stores report pages with `pageType: report`.
+
+## Generated
+
+<!-- hermes:wiki:generated:start -->
+No compiled summary yet.
+<!-- hermes:wiki:generated:end -->
+
+## Lint
+
+<!-- hermes:wiki:lint:start -->
+No lint results yet.
+<!-- hermes:wiki:lint:end -->
+
+## Notes
+
+<!-- hermes:human:start -->
+<!-- hermes:human:end -->
+""",
+    Path("index.md"): """# Wiki Index
+
+## Generated
+
+<!-- hermes:wiki:index:start -->
+- No compiled pages yet.
+<!-- hermes:wiki:index:end -->
+""",
+    Path("inbox.md"): "# Inbox\n\nDrop raw ideas, questions, and source links here.\n",
 }
 
 
