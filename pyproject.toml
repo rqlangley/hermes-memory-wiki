@@ -25,3 +25,6 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+  "live_openai: opt-in tests that call the real OpenAI embeddings API",
+]

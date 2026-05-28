@@ -55,6 +55,17 @@ If you do not want vector embeddings in the current user-plugin integration, do 
 
 - [Installation guide](docs/installation.md)
 - [Configuration guide](docs/configuration.md)
+- [Development and testing guide](docs/development.md)
+
+## Testing
+
+Run the default offline suite without network/API calls:
+
+```bash
+.venv/bin/python -m pytest -q
+```
+
+Live OpenAI tests are opt-in and marked `live_openai`; they are skipped unless `HERMES_MEMORY_WIKI_LIVE_OPENAI=1` and `OPENAI_API_KEY` are set. See [Development](docs/development.md) for the current live-test commands and status.
 
 ## Goals
 

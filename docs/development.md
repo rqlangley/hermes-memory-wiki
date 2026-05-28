@@ -59,20 +59,40 @@ Optionally verify the installed/importable package version:
 
 ## Live OpenAI tests
 
-This repository currently has no `tests/live/` suite. Live OpenAI tests are opt-in only if such a suite is added in the future. Do not run them by default in local verification, CI, or delegated tasks unless explicitly allowed, an API key is configured, and the live test directory exists.
+Live OpenAI tests are explicit opt-in tests marked with `@pytest.mark.live_openai`. They are skipped unless both of these environment conditions are true:
 
-If live tests are added and explicitly allowed, run:
+- `HERMES_MEMORY_WIKI_LIVE_OPENAI=1`
+- `OPENAI_API_KEY` is set
+
+Run the default non-live suite without network/API calls:
 
 ```bash
-HERMES_MEMORY_WIKI_LIVE_OPENAI=1 OPENAI_API_KEY="$OPENAI_API_KEY" .venv/bin/python -m pytest tests/live -v
+.venv/bin/python -m pytest -q
+```
+
+When live tests exist and are explicitly allowed, run them with:
+
+```bash
+set -a; . /home/langley/.hermes/.env; set +a; HERMES_MEMORY_WIKI_LIVE_OPENAI=1 .venv/bin/python -m pytest tests/live -q
+```
+
+You can inspect the marker registration with:
+
+```bash
+.venv/bin/python -m pytest --markers | grep live_openai
 ```
 
 Requirements and expectations:
 
-- `OPENAI_API_KEY` must already be set in the environment.
-- The command may send test inputs to OpenAI and may incur cost.
+- `OPENAI_API_KEY` must already be set in the environment used for the command.
+- The command may send synthetic test inputs to OpenAI and may incur cost.
 - Keep live fixtures minimal and avoid sensitive or user-private content.
 - Non-live tests must remain useful without network access or an API key.
+
+Current live-testing implementation status:
+
+- 2026-05-28: pytest marker/gating infrastructure added in `tests/conftest.py` and `pyproject.toml`.
+- 2026-05-28 verification: `.venv/bin/python -m pytest --markers | grep live_openai` shows the marker; `.venv/bin/python -m pytest -q` passed with 195 tests.
 
 ## Source-reference notes
 

@@ -18,14 +18,25 @@ Build and verify opt-in live OpenAI and pre-install plugin integration tests for
 
 ## Current Status
 
-- [x] Plan created.
-- [ ] Task 1: live pytest gating.
+- [x] Plan created and committed in `439ffb2 docs: plan live integration tests`.
+- [x] Task 1: live pytest gating implemented in `tests/conftest.py` and `pyproject.toml`.
 - [ ] Task 2: live OpenAI embedding provider tests.
 - [ ] Task 3: live vector reindex/search tests.
 - [ ] Task 4: reusable live plugin tool smoke script/tests.
 - [ ] Task 5: pre-install plugin layout simulation tests.
 - [ ] Task 6: negative-path/stale-index coverage.
 - [ ] Task 7: final verification/docs refresh.
+
+## Latest Verification
+
+Task 1 verification on 2026-05-28:
+
+```bash
+.venv/bin/python -m pytest --markers | grep live_openai
+.venv/bin/python -m pytest -q
+```
+
+Result: marker registration visible; 195 tests passed.
 
 ## Environment and Secrets
 
@@ -69,7 +80,7 @@ set -a; . /home/langley/.hermes/.env; set +a; .venv/bin/python scripts/smoke_liv
 
 ## Next Action
 
-Start Task 1 from the implementation plan: add pytest marker/gating infrastructure and update docs.
+Start Task 2 from the implementation plan: add `tests/live/test_openai_embeddings.py` with opt-in live OpenAI embedding provider contract tests.
 
 ## Paste-Into-New-Chat Prompt
 
