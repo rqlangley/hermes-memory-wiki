@@ -1,8 +1,8 @@
 # Configuration
 
-`hermes-memory-wiki` reads a `memory_wiki` section from Hermes configuration. It also needs the Hermes plugin and toolset settings that make the tools available in a session.
+`hermes-memory-wiki` needs Hermes plugin and toolset settings to make its tools available in a session. Current user-plugin tool handlers do **not** automatically read a `memory_wiki` section from Hermes configuration at runtime.
 
-The examples below are intended for the Hermes profile/config you use to run the agent. Edit with `hermes config edit` or the equivalent config workflow for your installation.
+Use Hermes config today for `plugins.enabled` and Hermes toolset enablement. Use per-call tool arguments such as `vaultPath` for supported runtime overrides. The `memory_wiki` keys documented below describe the Python library/default config shape for direct integrations, tests, and future Hermes config wiring; they are not active Hermes config knobs in the current user-plugin integration unless a caller passes them to the library directly.
 
 ## Enable the plugin
 
@@ -41,9 +41,26 @@ hermes tools
 
 Start a fresh session after changing enabled toolsets.
 
-## Memory wiki config keys
+## Current user-plugin runtime configuration
 
-Default configuration is equivalent to:
+Supported today in Hermes sessions:
+
+- Install the package in editable mode and install the repository as a user plugin by symlink or copy.
+- Enable the plugin with `plugins.enabled`.
+- Enable the `memory_wiki` toolset.
+- Set `OPENAI_API_KEY` in the environment used to launch Hermes when you want vector indexing/search.
+- Pass `vaultPath` per tool call for one-off custom vault locations.
+- Initialize the vault with `wiki_init`, then run the first `wiki_reindex` with `force: true` if you want to build the vector index.
+
+Current limitation:
+
+- The user-plugin tool handlers currently create their runtime config from a per-call `vaultPath` when provided, otherwise from library defaults. They do not automatically read `memory_wiki.vault_path`, `memory_wiki.embeddings.enabled`, `memory_wiki.search.default_search_mode`, or other `memory_wiki` keys from Hermes config.
+
+## Python library/default config shape
+
+The following keys are supported by `MemoryWikiConfig` / `load_config()` for Python integrations, tests, or future Hermes config wiring. Do not rely on placing this block in Hermes config to control the current user-plugin behavior.
+
+Default library configuration is equivalent to:
 
 ```yaml
 memory_wiki:
@@ -65,27 +82,27 @@ memory_wiki:
     timeout_seconds: 60
 ```
 
-### `memory_wiki.vault_path`
+### `memory_wiki.vault_path` (library/direct integrations)
 
-Path to the wiki vault. The default is:
+Path to the wiki vault for direct Python configuration. The default used by the current user-plugin handlers, unless a tool call supplies `vaultPath`, is:
 
 ```yaml
 memory_wiki:
   vault_path: ~/.hermes/wiki/main
 ```
 
-Use an absolute path or `~`-relative path:
+Use an absolute path or `~`-relative path in direct Python integrations:
 
 ```yaml
 memory_wiki:
   vault_path: ~/notes/hermes-memory-wiki
 ```
 
-Most tools also accept a per-call `vaultPath` argument for one-off overrides.
+Most user-plugin tools accept a per-call `vaultPath` argument; this is the supported Hermes-session override today.
 
-### `memory_wiki.render`
+### `memory_wiki.render` (library/direct integrations)
 
-Controls generated wiki output:
+Controls generated wiki output when supplied to `MemoryWikiConfig` / `load_config()` directly:
 
 ```yaml
 memory_wiki:
@@ -99,9 +116,9 @@ memory_wiki:
 - `create_backlinks`: generate backlink/index content during compile workflows.
 - `create_dashboards`: generate dashboard content during compile workflows.
 
-### `memory_wiki.search`
+### `memory_wiki.search` (library/direct integrations)
 
-Controls search mode and hybrid scoring weights:
+Controls search mode and hybrid scoring weights when supplied to `MemoryWikiConfig` / `load_config()` directly:
 
 ```yaml
 memory_wiki:
@@ -118,7 +135,7 @@ Supported search modes exposed by tools are `auto`, `keyword`, `vector`, and `hy
 - `hybrid` combines lexical and vector signals using the configured weights.
 - `auto` lets the tool choose an effective mode based on request/config and index availability.
 
-For keyword-only operation:
+For keyword-only operation in direct Python integrations:
 
 ```yaml
 memory_wiki:
@@ -126,9 +143,11 @@ memory_wiki:
     default_search_mode: keyword
 ```
 
-### `memory_wiki.embeddings`
+In the current Hermes user-plugin integration, request keyword behavior per call where the tool exposes `searchMode` rather than relying on `memory_wiki.search.default_search_mode` in Hermes config.
 
-Embeddings are enabled by default and use OpenAI:
+### `memory_wiki.embeddings` (library/direct integrations)
+
+Embeddings are enabled by default in the library config and use OpenAI:
 
 ```yaml
 memory_wiki:
@@ -141,13 +160,13 @@ memory_wiki:
     timeout_seconds: 60
 ```
 
-Set the environment variable named by `api_key_env` before launching Hermes:
+For the current user-plugin integration, set `OPENAI_API_KEY` before launching Hermes when you want vector indexing/search:
 
 ```bash
 export OPENAI_API_KEY="sk-..."
 ```
 
-To use a different environment variable name:
+To use a different environment variable name in direct Python integrations or future config wiring:
 
 ```yaml
 memory_wiki:
@@ -155,15 +174,15 @@ memory_wiki:
     api_key_env: HERMES_MEMORY_WIKI_OPENAI_API_KEY
 ```
 
-Then launch Hermes with that variable set:
+Then launch the direct integration with that variable set:
 
 ```bash
 export HERMES_MEMORY_WIKI_OPENAI_API_KEY="sk-..."
 ```
 
-## Disable embeddings
+## Avoid embeddings in the current user-plugin integration
 
-Disable embeddings when you do not want network calls, do not have an OpenAI API key, or want deterministic keyword-only behavior:
+The current user-plugin handlers do not read `memory_wiki.embeddings.enabled` from Hermes config, so this Hermes config block does **not** disable embeddings today:
 
 ```yaml
 memory_wiki:
@@ -173,10 +192,12 @@ memory_wiki:
     default_search_mode: keyword
 ```
 
-With embeddings disabled:
+Practical options today:
 
-- `wiki_search` should use keyword search unless a different mode is explicitly requested.
-- `wiki_reindex` will not create OpenAI embeddings.
+- Do not set `OPENAI_API_KEY` in the Hermes process environment.
+- Use keyword search mode where a tool call exposes `searchMode`.
+- Skip `wiki_reindex` if you do not want vector index creation attempts.
+- For direct Python integrations, construct `MemoryWikiConfig(embeddings=EmbeddingConfig(enabled=False), search=SearchConfig(default_search_mode="keyword"))` or pass the equivalent raw config to `load_config()`.
 - `OPENAI_API_KEY` is not required for keyword search, vault initialization, compile, get, apply, status, or lint workflows.
 
 ## Initialize and maintain the vault
@@ -207,7 +228,7 @@ wiki_lint
 
 ## First reindex
 
-For vector search, make sure the configured API key environment variable is present in the Hermes process environment. With defaults:
+For vector search, make sure `OPENAI_API_KEY` is present in the Hermes process environment:
 
 ```bash
 export OPENAI_API_KEY="sk-..."
@@ -225,11 +246,11 @@ For the first full build or after large changes, pass `force: true`:
 { "force": true }
 ```
 
-After reindexing, `wiki_search` can use `hybrid` or `vector` modes. Keyword search remains available regardless of embedding configuration.
+After reindexing, `wiki_search` can use `hybrid` or `vector` modes. Keyword search remains available without vector embeddings.
 
 ## Available tools
 
-- `wiki_init`: initialize the configured vault.
+- `wiki_init`: initialize the default vault, or the per-call `vaultPath` when supplied.
 - `wiki_status`: report vault status and cache/index presence.
 - `wiki_search`: search pages and claims.
 - `wiki_get`: read a page by path, id, title, or claim id.

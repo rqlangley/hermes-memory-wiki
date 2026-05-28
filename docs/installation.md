@@ -140,7 +140,7 @@ To use a different vault for a one-off call, pass `vaultPath` to a tool invocati
 { "vaultPath": "~/notes/hermes-wiki" }
 ```
 
-For a persistent custom vault path, configure `memory_wiki.vault_path`; see [Configuration](configuration.md).
+Current limitation: the user-plugin tool handlers do not automatically read `memory_wiki.vault_path` from Hermes config. Use the default vault path or pass `vaultPath` per tool call until config wiring is added; see [Configuration](configuration.md).
 
 ## 6. Run the first reindex
 
@@ -162,7 +162,7 @@ For the first full rebuild, use:
 { "force": true }
 ```
 
-If embeddings are disabled, `wiki_reindex` will skip vector embedding work. Keyword search remains available.
+If you do not want vector embeddings today, do not set `OPENAI_API_KEY`, skip `wiki_reindex`, and use keyword search mode where available. Keyword search remains available without an API key. The Hermes config key `memory_wiki.embeddings.enabled` is part of the Python library config shape, but the current user-plugin handlers do not read it from Hermes config.
 
 ## Upgrade notes
 

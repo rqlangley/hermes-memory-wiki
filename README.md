@@ -49,15 +49,7 @@ Embeddings use OpenAI by default. Set the key before reindexing:
 export OPENAI_API_KEY="sk-..."
 ```
 
-If you do not want vector embeddings, disable them in config and use keyword search:
-
-```yaml
-memory_wiki:
-  embeddings:
-    enabled: false
-  search:
-    default_search_mode: keyword
-```
+If you do not want vector embeddings in the current user-plugin integration, do not set `OPENAI_API_KEY`, skip `wiki_reindex`, and use keyword search mode where the tool call exposes `searchMode`. The Hermes user-plugin tool handlers currently honor a per-call `vaultPath` override, but they do **not** automatically read a `memory_wiki` section from Hermes config; see [Configuration](docs/configuration.md) for the current limitation and Python integration defaults.
 
 ## Documentation
 
