@@ -19,7 +19,7 @@ Build and verify opt-in live OpenAI and pre-install plugin integration tests for
 ## Current Status
 
 - [x] Plan created and committed in `439ffb2 docs: plan live integration tests`.
-- [x] Task 1: live pytest gating implemented in `tests/conftest.py` and `pyproject.toml`.
+- [x] Task 1: live pytest gating.
 - [ ] Task 2: live OpenAI embedding provider tests.
 - [ ] Task 3: live vector reindex/search tests.
 - [ ] Task 4: reusable live plugin tool smoke script/tests.
