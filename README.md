@@ -13,6 +13,12 @@ The plugin is installed either as an editable Python package or as a user plugin
 - `wiki_reindex`
 - `wiki_lint`
 
+It also registers three plugin-scoped skills. Because Hermes namespaces skills bundled by plugins, load them with the qualified `memory-wiki:` prefix:
+
+- `memory-wiki:wiki-maintainer`
+- `memory-wiki:wiki-authoring`
+- `memory-wiki:wiki-search`
+
 ## Quick start
 
 From this repository:
@@ -42,6 +48,8 @@ Start a fresh Hermes session after changing plugin or tool settings. Then initia
 1. `wiki_init`
 2. `wiki_status`
 3. `wiki_reindex` with `{ "force": true }`
+
+To use the bundled workflow guidance, explicitly load the plugin-scoped skills by qualified name, for example `/skill memory-wiki:wiki-maintainer` or `skill_view(name="memory-wiki:wiki-maintainer")`. Looking up `wiki-maintainer` without the `memory-wiki:` prefix may fail because it is a plugin-bundled skill, not a flat top-level skill installed under `~/.hermes/skills`.
 
 Embeddings use OpenAI by default. Set the key before reindexing:
 

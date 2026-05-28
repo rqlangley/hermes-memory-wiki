@@ -114,6 +114,26 @@ Start a fresh Hermes session after enabling the toolset. The available tools sho
 - `wiki_reindex`
 - `wiki_lint`
 
+The plugin also registers bundled skills. Hermes exposes plugin-bundled skills with a plugin namespace, so use the qualified names rather than the bare skill names:
+
+- `memory-wiki:wiki-maintainer`
+- `memory-wiki:wiki-authoring`
+- `memory-wiki:wiki-search`
+
+Examples:
+
+```text
+/skill memory-wiki:wiki-maintainer
+```
+
+or, from an agent/tool context:
+
+```text
+skill_view(name="memory-wiki:wiki-maintainer")
+```
+
+If `wiki-maintainer`, `wiki-authoring`, or `wiki-search` are not found by their bare names, that is expected for plugin-bundled skills; retry with the `memory-wiki:` prefix. If the qualified names are not found after installation, restart the Hermes process that serves the session so plugin registrations are rediscovered.
+
 ## 5. Initialize the vault
 
 The default vault path is:
