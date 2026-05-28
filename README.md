@@ -13,11 +13,13 @@ The plugin is installed either as an editable Python package or as a user plugin
 - `wiki_reindex`
 - `wiki_lint`
 
-It also registers three plugin-scoped skills. Because Hermes namespaces skills bundled by plugins, load them with the qualified `memory-wiki:` prefix:
+It also ships three workflow skills:
 
-- `memory-wiki:wiki-maintainer`
-- `memory-wiki:wiki-authoring`
-- `memory-wiki:wiki-search`
+- `wiki-maintainer`
+- `wiki-authoring`
+- `wiki-search`
+
+For best agent discoverability, install these as native Hermes skills under `~/.hermes/skills` during setup. The plugin also registers namespaced copies such as `memory-wiki:wiki-maintainer`, but current Hermes skill discovery may not list plugin-bundled skills for automatic loading.
 
 ## Quick start
 
@@ -27,6 +29,8 @@ From this repository:
 .venv/bin/python -m pip install -e .
 mkdir -p ~/.hermes/plugins
 ln -s "$PWD" ~/.hermes/plugins/memory-wiki
+mkdir -p ~/.hermes/skills/memory-wiki
+cp -a src/hermes_memory_wiki/skills/wiki-* ~/.hermes/skills/memory-wiki/
 ```
 
 Enable the plugin in Hermes config:
@@ -49,7 +53,7 @@ Start a fresh Hermes session after changing plugin or tool settings. Then initia
 2. `wiki_status`
 3. `wiki_reindex` with `{ "force": true }`
 
-To use the bundled workflow guidance, explicitly load the plugin-scoped skills by qualified name, for example `/skill memory-wiki:wiki-maintainer` or `skill_view(name="memory-wiki:wiki-maintainer")`. Looking up `wiki-maintainer` without the `memory-wiki:` prefix may fail because it is a plugin-bundled skill, not a flat top-level skill installed under `~/.hermes/skills`.
+To use the workflow guidance, load the native skills by bare name, for example `/skill wiki-maintainer` or `skill_view(name="wiki-maintainer")`. If you skip the native-skill copy step, the plugin-scoped fallback names are `memory-wiki:wiki-maintainer`, `memory-wiki:wiki-authoring`, and `memory-wiki:wiki-search`, but those may not appear in automatic skill-discovery lists.
 
 Embeddings use OpenAI by default. Set the key before reindexing:
 

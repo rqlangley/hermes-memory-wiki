@@ -41,27 +41,40 @@ hermes tools
 
 Start a fresh session after changing enabled toolsets.
 
-## Load the bundled skills
+## Install and load the native skills
 
-`hermes-memory-wiki` registers its workflow skills as plugin-bundled skills. Hermes exposes those skills with the plugin namespace, not as flat top-level skills, so use the qualified names:
+`hermes-memory-wiki` ships workflow skills for wiki maintenance, authoring, and search. Install them into the native Hermes skills directory so `skills_list`, the injected available-skills context, and automatic skill-selection behavior can discover them:
 
-- `memory-wiki:wiki-maintainer`
-- `memory-wiki:wiki-authoring`
-- `memory-wiki:wiki-search`
+```bash
+mkdir -p ~/.hermes/skills/memory-wiki
+cp -a src/hermes_memory_wiki/skills/wiki-* ~/.hermes/skills/memory-wiki/
+```
+
+After installing or updating the native skills, run `/reload-skills` in an existing session or start a fresh session. The skills should then load by bare name:
+
+- `wiki-maintainer`
+- `wiki-authoring`
+- `wiki-search`
 
 For example:
 
 ```text
-/skill memory-wiki:wiki-search
+/skill wiki-search
 ```
 
 or from an agent/tool context:
 
 ```text
-skill_view(name="memory-wiki:wiki-search")
+skill_view(name="wiki-search")
 ```
 
-Bare names such as `wiki-search` may not resolve unless the skills have also been separately copied into `~/.hermes/skills`. That separate copy is not required for normal plugin usage.
+The plugin also registers namespaced fallback copies:
+
+- `memory-wiki:wiki-maintainer`
+- `memory-wiki:wiki-authoring`
+- `memory-wiki:wiki-search`
+
+These qualified names are useful as a fallback, but current Hermes skill-listing/discovery may not surface plugin-bundled skills automatically. Native-skill installation is therefore recommended for normal plugin usage.
 
 ## Current user-plugin runtime configuration
 
@@ -70,6 +83,7 @@ Supported today in Hermes sessions:
 - Install the package in editable mode and install the repository as a user plugin by symlink or copy.
 - Enable the plugin with `plugins.enabled`.
 - Enable the `memory_wiki` toolset.
+- Install the wiki workflow skills into `~/.hermes/skills/memory-wiki` for native discovery.
 - Set `OPENAI_API_KEY` in the environment used to launch Hermes when you want vector indexing/search.
 - Pass `vaultPath` per tool call for one-off custom vault locations.
 - Initialize the vault with `wiki_init`, then run the first `wiki_reindex` with `force: true` if you want to build the vector index.
