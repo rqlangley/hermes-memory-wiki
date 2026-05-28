@@ -374,6 +374,89 @@ def test_upsert_entity_lookup_refuses_wrong_broad_page_type(tmp_path):
 
 
 
+def _concept_raw(**overrides):
+    raw = {
+        "op": "upsert_concept",
+        "title": "Retrieval Augmented Memory",
+        "body": "Retrieval augmented memory combines recall and grounded notes.",
+        "sourceIds": ["source.note-1"],
+        "claims": [{"text": "RAM links source-backed facts into wiki pages."}],
+        "questions": ["How fresh is the index?"],
+        "contradictions": ["One source says vector search is disabled."],
+        "status": "draft",
+        "confidence": 0.7,
+    }
+    raw.update(overrides)
+    return raw
+
+
+@pytest.mark.parametrize("missing", ["title", "body", "sourceIds"])
+def test_normalize_upsert_concept_requires_title_body_and_source_ids(missing):
+    raw = _concept_raw()
+    raw.pop(missing)
+
+    with pytest.raises(ValueError, match=missing):
+        normalize_mutation(raw)
+
+
+def test_upsert_concept_writes_concepts_path_default_id_and_frontmatter(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+
+    result = apply_mutation(config, normalize_mutation(_concept_raw()))
+
+    assert result.created is True
+    assert result.path == "concepts/retrieval-augmented-memory.md"
+    assert result.id == "concept.retrieval-augmented-memory"
+    doc = parse_wiki_markdown((config.vault_path / result.path).read_text(encoding="utf-8"))
+    assert doc.frontmatter["id"] == "concept.retrieval-augmented-memory"
+    assert doc.frontmatter["title"] == "Retrieval Augmented Memory"
+    assert doc.frontmatter["pageType"] == "concept"
+    assert "entityType" not in doc.frontmatter
+    assert doc.frontmatter["sourceIds"] == ["source.note-1"]
+    assert doc.frontmatter["claims"] == [{"text": "RAM links source-backed facts into wiki pages."}]
+    assert doc.frontmatter["questions"] == ["How fresh is the index?"]
+    assert doc.frontmatter["contradictions"] == ["One source says vector search is disabled."]
+    assert doc.frontmatter["status"] == "draft"
+    assert doc.frontmatter["confidence"] == 0.7
+    assert re.match(r"^\d{4}-\d{2}-\d{2}T", doc.frontmatter["updatedAt"])
+
+
+def test_upsert_concept_preserves_existing_id_and_human_notes_on_refresh(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    first = apply_mutation(config, normalize_mutation(_concept_raw()))
+    page_path = config.vault_path / first.path
+    text = page_path.read_text(encoding="utf-8").replace(
+        "id: concept.retrieval-augmented-memory", "id: concept.existing-memory"
+    )
+    text = text.replace(
+        f"{HERMES_HUMAN_START}\n## Human Notes\n\n{HERMES_HUMAN_END}",
+        f"{HERMES_HUMAN_START}\n## Human Notes\n\nKeep concept note.\n{HERMES_HUMAN_END}",
+    )
+    page_path.write_text(text, encoding="utf-8")
+
+    result = apply_mutation(config, normalize_mutation(_concept_raw(body="Updated concept summary.")))
+
+    assert result.created is False
+    assert result.path == first.path
+    assert result.id == "concept.existing-memory"
+    doc = parse_wiki_markdown(page_path.read_text(encoding="utf-8"))
+    assert doc.frontmatter["id"] == "concept.existing-memory"
+    assert "Updated concept summary." in doc.body
+    assert "Keep concept note." in doc.body
+
+
+def test_upsert_concept_lookup_refuses_wrong_broad_page_type(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    entity = apply_mutation(config, normalize_mutation(_entity_raw()))
+
+    with pytest.raises(ValueError, match="pageType.*concept"):
+        apply_mutation(config, normalize_mutation(_concept_raw(lookup=entity.id)))
+
+
+
 def _update_raw(**overrides):
     raw = {
         "op": "update_metadata",

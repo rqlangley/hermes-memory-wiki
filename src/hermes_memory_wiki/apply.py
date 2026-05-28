@@ -59,6 +59,8 @@ def normalize_mutation(raw: Mapping[str, Any]) -> WikiMutation:
         return _normalize_update_metadata(raw)
     if mutation_type == "upsert_entity":
         return _normalize_upsert_entity(raw)
+    if mutation_type == "upsert_concept":
+        return _normalize_upsert_concept(raw)
     if mutation_type != "create_synthesis":
         raise ValueError(f"unsupported mutation op: {mutation_type}")
 
@@ -85,6 +87,8 @@ def apply_mutation(config: MemoryWikiConfig, mutation: WikiMutation) -> ApplyRes
         return _apply_update_metadata(config, mutation)
     if mutation.type == "upsert_entity":
         return _apply_upsert_typed_page(config, mutation, page_type="entity")
+    if mutation.type == "upsert_concept":
+        return _apply_upsert_typed_page(config, mutation, page_type="concept")
     if mutation.type != "create_synthesis":
         raise ValueError(f"unsupported mutation type: {mutation.type}")
     return _apply_create_synthesis(config, mutation)
@@ -98,6 +102,21 @@ def _normalize_upsert_entity(raw: Mapping[str, Any]) -> WikiMutation:
         source_ids=_required_string_list(raw, "sourceIds"),
         entity_type=_required_string(raw, "entityType"),
         aliases=_string_list(raw.get("aliases")),
+        claims=_claims(raw.get("claims")),
+        questions=_string_list(raw.get("questions")),
+        contradictions=_string_list(raw.get("contradictions")),
+        confidence=_optional_confidence(raw.get("confidence")),
+        status=_optional_string(raw.get("status")) or "active",
+        lookup=_optional_string(raw.get("lookup")),
+    )
+
+
+def _normalize_upsert_concept(raw: Mapping[str, Any]) -> WikiMutation:
+    return WikiMutation(
+        type="upsert_concept",
+        title=_required_string(raw, "title"),
+        body=_required_string(raw, "body"),
+        source_ids=_required_string_list(raw, "sourceIds"),
         claims=_claims(raw.get("claims")),
         questions=_string_list(raw.get("questions")),
         contradictions=_string_list(raw.get("contradictions")),
