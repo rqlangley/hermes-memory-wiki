@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from hermes_memory_wiki.apply import apply_mutation, normalize_mutation
 from hermes_memory_wiki.compile import compile_vault
 from hermes_memory_wiki.config import MemoryWikiConfig
 from hermes_memory_wiki.hybrid_search import search_wiki
@@ -16,41 +17,46 @@ def _config(vault_path) -> MemoryWikiConfig:
     return MemoryWikiConfig(vault_path=vault_path)
 
 
-def _write_synthetic_page(root) -> None:
-    path = root / "syntheses" / "live-vector-integration.md"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        "\n".join(
-            [
-                "---",
-                "id: synthesis.live-vector-integration",
-                "title: Live Vector Integration",
-                "kind: synthesis",
-                "status: stable",
-                "source_ids:",
-                "  - live-vector-fixture",
-                "claims:",
-                "  - id: claim.live-vector-integration",
-                "    text: Live OpenAI vector reindexing retrieves synthetic Hermes wiki content.",
-                "    confidence: 0.99",
-                "    evidence:",
-                "      - sourceId: live-vector-fixture",
-                "        quote: synthetic Hermes wiki content",
-                "---",
-                "# Live Vector Integration",
-                "",
-                "This page validates live OpenAI vector reindexing for hermes-memory-wiki with synthetic content only.",
-                "",
-            ]
+def _create_synthetic_page(config: MemoryWikiConfig) -> None:
+    result = apply_mutation(
+        config,
+        normalize_mutation(
+            {
+                "op": "create_synthesis",
+                "path": "syntheses/live-vector-integration.md",
+                "id": "synthesis.live-vector-integration",
+                "title": "Live Vector Integration",
+                "body": (
+                    "This page validates live OpenAI vector reindexing for "
+                    "hermes-memory-wiki with synthetic content only."
+                ),
+                "sourceIds": ["live-vector-fixture"],
+                "claims": [
+                    {
+                        "id": "claim.live-vector-integration",
+                        "text": "Live OpenAI vector reindexing retrieves synthetic Hermes wiki content.",
+                        "confidence": 0.99,
+                        "evidence": [
+                            {
+                                "sourceId": "live-vector-fixture",
+                                "quote": "synthetic Hermes wiki content",
+                            }
+                        ],
+                    }
+                ],
+                "status": "stable",
+            }
         ),
-        encoding="utf-8",
     )
+    assert result.path == "syntheses/live-vector-integration.md"
+    assert result.id == "synthesis.live-vector-integration"
+    assert result.created is True
 
 
 def test_live_reindex_builds_openai_vector_index_for_synthetic_vault(tmp_path) -> None:
     config = _config(tmp_path / "vault")
     initialize_vault(config)
-    _write_synthetic_page(config.vault_path)
+    _create_synthetic_page(config)
     compile_result = compile_vault(config)
 
     result = reindex_vault(config, force=True)
@@ -68,7 +74,7 @@ def test_live_reindex_builds_openai_vector_index_for_synthetic_vault(tmp_path) -
 def test_live_hybrid_search_uses_openai_vectors_for_synthetic_vault(tmp_path) -> None:
     config = _config(tmp_path / "vault")
     initialize_vault(config)
-    _write_synthetic_page(config.vault_path)
+    _create_synthetic_page(config)
     compile_vault(config)
     reindex_result = reindex_vault(config, force=True)
     assert reindex_result.diagnostics == []
