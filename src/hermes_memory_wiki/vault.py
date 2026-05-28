@@ -214,6 +214,10 @@ def _resolve_page(root: Path, lookup: str) -> WikiPageSummary | None:
             return page
 
     for page in pages:
+        if normalized_lookup in page.aliases:
+            return page
+
+    for page in pages:
         if any(claim.id == normalized_lookup for claim in page.claims):
             return page
 

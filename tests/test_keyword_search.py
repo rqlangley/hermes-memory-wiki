@@ -105,6 +105,7 @@ def test_page_search_text_includes_summary_fields_claims_and_evidence() -> None:
         "Langley",
         "entities/langley.md",
         "entity.langley",
+        "entity",
         "person",
         "source-alpha",
         "LGL",
@@ -185,6 +186,8 @@ def _page(
         source_ids=source_ids or [],
         claims=claims or [],
         aliases=aliases or [],
+        page_type="concept",
+        entity_type=None,
     )
 
 
@@ -217,6 +220,34 @@ def test_claim_text_match_returns_matched_claim_metadata() -> None:
     assert result.matched_claim_id == "claim-prefers-pytest"
     assert result.snippet == "Prefers pytest for deterministic validation."
     assert result.metadata["matchedClaim"]["id"] == "claim-prefers-pytest"
+
+
+def test_keyword_result_metadata_includes_openclaw_page_fields() -> None:
+    page = WikiPageSummary(
+        path="entities/ada.md",
+        kind="entity",
+        id="entity.ada",
+        page_type="entity",
+        entity_type="person",
+        title="Ada Lovelace",
+        body="analytical engine needle",
+        source_ids=["source.menabrea"],
+        confidence=0.91,
+        status="active",
+        updated_at="2026-05-28T00:00:00Z",
+    )
+
+    result = keyword_search([page], "needle")[0]
+
+    assert result.kind == "entity"
+    assert result.metadata["id"] == "entity.ada"
+    assert result.metadata["kind"] == "entity"
+    assert result.metadata["pageType"] == "entity"
+    assert result.metadata["entityType"] == "person"
+    assert result.metadata["sourceIds"] == ["source.menabrea"]
+    assert result.metadata["confidence"] == 0.91
+    assert result.metadata["status"] == "active"
+    assert result.metadata["updatedAt"] == "2026-05-28T00:00:00Z"
 
 
 def test_confidence_boosts_claim_score() -> None:

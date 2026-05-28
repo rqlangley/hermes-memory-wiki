@@ -326,6 +326,8 @@ def test_page_document_includes_title_path_kind_claims_questions_and_body() -> N
     assert "Title: Search Memory" in page_doc.text
     assert "Path: topics/search.md" in page_doc.text
     assert "Kind: concept" in page_doc.text
+    assert "Page Type:" in page_doc.text
+    assert "Page ID: concept:search" in page_doc.text
     assert "Aliases: Memory Search" in page_doc.text
     assert "Source IDs: source-1" in page_doc.text
     assert "Claims:\n- claim-1: Search uses deterministic text." in page_doc.text
@@ -334,8 +336,14 @@ def test_page_document_includes_title_path_kind_claims_questions_and_body() -> N
     assert "Body:\nHuman-authored body line." in page_doc.text
     assert page_doc.metadata == {
         "page_id": "concept:search",
+        "kind": "concept",
+        "page_type": None,
+        "entity_type": None,
         "source_ids": ["source-1"],
         "aliases": ["Memory Search"],
+        "confidence": None,
+        "status": None,
+        "updated_at": None,
         "claim_count": 1,
         "question_count": 1,
         "contradiction_count": 1,
@@ -377,6 +385,8 @@ def test_claim_document_includes_claim_text_page_title_source_ids_and_evidence()
     assert claim_doc.kind == "concept"
     assert claim_doc.title == "Evidence Page"
     assert "Page: Evidence Page" in claim_doc.text
+    assert "Path: topics/evidence.md" in claim_doc.text
+    assert "Kind: concept" in claim_doc.text
     assert "Claim ID: claim-evidence" in claim_doc.text
     assert "Claim: Evidence is copied into claim documents." in claim_doc.text
     assert "Status: active" in claim_doc.text
@@ -390,6 +400,12 @@ def test_claim_document_includes_claim_text_page_title_source_ids_and_evidence()
     assert "text=quoted evidence text" in claim_doc.text
     assert claim_doc.metadata == {
         "page_id": "concept:evidence",
+        "kind": "concept",
+        "page_type": None,
+        "entity_type": None,
+        "source_ids": ["page-source"],
+        "confidence": None,
+        "updated_at": None,
         "claim_id": "claim-evidence",
         "claim_ordinal": 0,
         "status": "active",
@@ -448,6 +464,24 @@ def test_text_hash_changes_when_text_changes() -> None:
     changed_hash = build_search_documents([changed])[0].text_hash
 
     assert original_hash != changed_hash
+
+
+def test_vector_documents_keep_directory_derived_kind_not_arbitrary_page_type() -> None:
+    page = WikiPageSummary(
+        path="entities/ada.md",
+        kind="entity",
+        id="entity.ada",
+        title="Ada",
+        page_type="person",
+        entity_type="person",
+        body="Ada notes.",
+    )
+
+    doc = build_search_documents([page])[0]
+
+    assert doc.kind == "entity"
+    assert doc.metadata["kind"] == "entity"
+    assert doc.metadata["page_type"] == "person"
 
 
 def test_generated_related_blocks_and_frontmatter_are_excluded_from_body_text() -> None:

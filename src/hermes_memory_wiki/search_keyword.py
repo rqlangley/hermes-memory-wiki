@@ -153,7 +153,13 @@ def keyword_search(
 
         metadata: dict[str, Any] = {
             "id": page.id,
+            "kind": page.kind,
+            "pageType": page.page_type,
+            "entityType": page.entity_type,
             "sourceIds": list(page.source_ids),
+            "confidence": page.confidence,
+            "status": page.status,
+            "updatedAt": page.updated_at,
             "claimCount": len(page.claims),
         }
         matched_claim_id = None

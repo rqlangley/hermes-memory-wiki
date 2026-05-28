@@ -191,12 +191,19 @@ def wiki_get(args: Mapping[str, Any] | None = None) -> str:
     )
     if result is None:
         return _response(f"No memory wiki page found for {lookup!r}.", {"lookup": lookup, "found": False})
+    page = getattr(result, "page", None)
     details = {
         "found": True,
         "path": result.path,
         "id": result.id,
         "title": result.title,
         "kind": result.kind,
+        "pageType": getattr(page, "page_type", None),
+        "entityType": getattr(page, "entity_type", None),
+        "sourceIds": list(getattr(page, "source_ids", [])),
+        "confidence": getattr(page, "confidence", None),
+        "status": getattr(page, "status", None),
+        "updatedAt": getattr(page, "updated_at", None),
         "content": result.content,
         "fromLine": result.from_line,
         "lineCount": result.line_count,

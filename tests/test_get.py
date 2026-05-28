@@ -19,6 +19,13 @@ id: entity.ada
 title: {title}
 pageType: entity
 entityType: person
+aliases:
+  - Enchantress of Numbers
+sourceIds:
+  - source.menabrea
+confidence: 0.88
+status: active
+updatedAt: "2026-05-28T00:00:00Z"
 claims:
   - id: claim:ada-first-programmer
     text: Ada is often described as the first computer programmer.
@@ -83,6 +90,32 @@ def test_get_page_resolves_title(tmp_path):
 
     assert result is not None
     assert result.path == "entities/ada.md"
+
+
+def test_get_page_resolves_alias(tmp_path):
+    root = tmp_path / "vault"
+    _write(root, "entities/ada.md", _sample_page())
+
+    result = get_page(_config(root), "Enchantress of Numbers")
+
+    assert result is not None
+    assert result.path == "entities/ada.md"
+
+
+def test_get_page_result_exposes_openclaw_metadata(tmp_path):
+    root = tmp_path / "vault"
+    _write(root, "entities/ada.md", _sample_page())
+
+    result = get_page(_config(root), "entity.ada")
+
+    assert result is not None
+    assert result.kind == "entity"
+    assert result.page.page_type == "entity"
+    assert result.page.entity_type == "person"
+    assert result.page.source_ids == ["source.menabrea"]
+    assert result.page.confidence == 0.88
+    assert result.page.status == "active"
+    assert result.page.updated_at == "2026-05-28T00:00:00Z"
 
 
 def test_get_page_resolves_claim_id_to_parent_page(tmp_path):

@@ -33,7 +33,7 @@ class WikiMutation:
     questions: list[str] = field(default_factory=list)
     contradictions: list[str] = field(default_factory=list)
     confidence: int | float | None = None
-    status: str = "draft"
+    status: str = "active"
     path: str | None = None
     id: str | None = None
     lookup: str | None = None
@@ -70,7 +70,7 @@ def normalize_mutation(raw: Mapping[str, Any]) -> WikiMutation:
         questions=_string_list(raw.get("questions")),
         contradictions=_string_list(raw.get("contradictions")),
         confidence=_optional_confidence(raw.get("confidence")),
-        status=_optional_string(raw.get("status")) or "draft",
+        status=_optional_string(raw.get("status")) or "active",
         path=_optional_string(raw.get("path")),
         id=_optional_string(raw.get("id")),
     )
@@ -89,7 +89,6 @@ def _normalize_update_metadata(raw: Mapping[str, Any]) -> WikiMutation:
     update_fields = frozenset(
         key
         for key in (
-            "title",
             "sourceIds",
             "claims",
             "questions",
@@ -102,7 +101,7 @@ def _normalize_update_metadata(raw: Mapping[str, Any]) -> WikiMutation:
     return WikiMutation(
         type="update_metadata",
         lookup=_required_string(raw, "lookup"),
-        title=_optional_string(raw.get("title")) or "",
+        title="",
         source_ids=_string_list(raw.get("sourceIds")) if "sourceIds" in raw else [],
         claims=_claims(raw.get("claims")) if "claims" in raw else [],
         questions=_string_list(raw.get("questions")) if "questions" in raw else [],
@@ -126,8 +125,7 @@ def _apply_update_metadata(config: MemoryWikiConfig, mutation: WikiMutation) -> 
     doc = parse_wiki_markdown(path.read_text(encoding="utf-8"))
     frontmatter = dict(doc.frontmatter)
 
-    if "title" in mutation.update_fields and mutation.title:
-        frontmatter["title"] = mutation.title
+
     if "sourceIds" in mutation.update_fields:
         frontmatter["sourceIds"] = mutation.source_ids
     if "claims" in mutation.update_fields:

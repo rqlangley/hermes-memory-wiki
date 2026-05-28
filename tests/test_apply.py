@@ -104,6 +104,18 @@ def test_create_synthesis_frontmatter_contains_claims_source_ids_status_and_upda
     assert re.match(r"^\d{4}-\d{2}-\d{2}T", doc.frontmatter["updatedAt"])
 
 
+def test_create_synthesis_defaults_status_to_active(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    raw = _base_raw()
+    raw.pop("status")
+
+    result = apply_mutation(config, normalize_mutation(raw))
+
+    doc = parse_wiki_markdown((config.vault_path / result.path).read_text(encoding="utf-8"))
+    assert doc.frontmatter["status"] == "active"
+
+
 def test_create_synthesis_frontmatter_contains_questions_contradictions_and_confidence(tmp_path):
     initialize_vault(_config(tmp_path / "vault"))
     config = _config(tmp_path / "vault")
@@ -294,6 +306,17 @@ def test_update_metadata_preserves_body(tmp_path):
 
     updated_body = parse_wiki_markdown(page_path.read_text(encoding="utf-8")).body
     assert updated_body == original_body
+
+
+def test_update_metadata_ignores_unsupported_title_changes(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    created = _create_page(config)
+
+    apply_mutation(config, normalize_mutation(_update_raw(title="Renamed Synthesis")))
+
+    doc = parse_wiki_markdown((config.vault_path / created.path).read_text(encoding="utf-8"))
+    assert doc.frontmatter["title"] == "Project Alpha: Memory & RAG!"
 
 
 def test_update_metadata_changes_updated_at(tmp_path):
