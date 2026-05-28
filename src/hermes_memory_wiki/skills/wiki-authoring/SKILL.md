@@ -14,34 +14,80 @@ metadata:
 
 ## Overview
 
-Author wiki content by reading the existing page context, applying the smallest useful mutation, compiling derived outputs, and linting the vault. Prefer precise updates over broad rewrites.
+Author OpenClaw-compatible memory wiki content by reading existing context, applying the smallest useful mutation, compiling derived outputs, linting the vault, and refreshing search indexes when a tool workflow allows it. Prefer precise source-backed updates over broad rewrites.
 
 ## When to Use
 
-- A user asks to add a new entity, topic, claim, or synthesis page.
+- A user asks to add a new entity, concept, claim, source, report note, or synthesis page.
 - Existing wiki content needs a correction, clarification, or additional source-backed note.
-- A draft update needs validation against existing page shape.
+- A draft update needs validation against the OpenClaw-compatible schema.
 - A recent edit should be compiled and checked for wiki consistency.
+
+## Schema Essentials
+
+Directory taxonomy defines broad page kind:
+
+- `entities/` pages use `pageType: entity`.
+- `concepts/` pages use `pageType: concept`.
+- `syntheses/` pages use `pageType: synthesis`.
+- `sources/` pages use `pageType: source`.
+- `reports/` pages use `pageType: report`.
+
+Use `entityType`, not `pageType`, for entity subtypes. A person page is an entity page with `entityType: person`; organizations, projects, systems, and products are also subtypes under `pageType: entity`.
+
+Required discipline:
+
+- Keep `id`, `title`, and `pageType` in frontmatter.
+- Put `sourceIds` on non-source/non-report pages so claims can be traced to source pages.
+- Prefer structured `claims` over unsupported prose-only assertions.
+- Give each claim a stable `id`, clear `text`, `status`, `confidence`, and `updatedAt` when known.
+- Add `evidence` entries for source-backed claims.
+
+Evidence format example:
+
+```yaml
+claims:
+  - id: claim.ada.role
+    text: Ada is the project lead for the memory wiki work.
+    status: active
+    confidence: 0.9
+    evidence:
+      - kind: source
+        sourceId: source.project-notes
+        path: sources/project-notes.md
+        lines: "12-18"
+        weight: 1
+        note: Project notes identify the role.
+        confidence: 0.9
+        privacyTier: standard
+        updatedAt: "2026-05-28T00:00:00Z"
+    updatedAt: "2026-05-28T00:00:00Z"
+```
 
 ## Authoring Workflow
 
 1. Use `wiki_get` to read the target page or nearest related page before changing anything.
-2. Prepare a minimal content change that matches the page type and vault conventions.
-3. Use `wiki_apply` to create or update the page.
-4. Run `wiki_compile` so generated indexes and summaries reflect the change.
-5. Run `wiki_lint` to catch malformed links, metadata issues, or structural problems.
-6. If lint reports errors, inspect the affected page with `wiki_get`, then apply a focused fix with `wiki_apply`.
+2. Check for an existing entity/concept/source to avoid duplicate pages.
+3. Prepare a minimal content change that matches the directory taxonomy and schema.
+4. Use `wiki_apply` to create or update the page.
+5. Run `wiki_compile` so generated indexes, reports, and cache files reflect the change.
+6. Run `wiki_lint` to catch malformed links, metadata issues, provenance gaps, or structural problems.
+7. If search freshness matters after the edit, use the maintenance workflow to run `wiki_reindex` before relying on search.
+8. If lint reports errors, inspect the affected page with `wiki_get`, then apply a focused fix with `wiki_apply`.
 
 ## Pitfalls
 
-- Do not invent details that are not supported by the conversation or retrieved wiki context.
+- Do not invent details that are not supported by the conversation, source pages, or retrieved wiki context.
 - Do not overwrite large sections when a targeted `wiki_apply` update is enough.
+- Do not treat a person as its own broad page kind; use `pageType: entity` plus `entityType: person`.
+- Do not omit `sourceIds` from entity, concept, or synthesis pages unless the page is intentionally unsourced and the limitation is explicit.
 - Do not claim the edit is ready until `wiki_compile` and `wiki_lint` have run after the change.
-- Keep titles, identifiers, and links consistent with the existing page style.
 
 ## Verification Checklist
 
 - Target content was inspected with `wiki_get`.
 - The update was applied through `wiki_apply`.
+- Frontmatter uses the correct broad `pageType` and any entity subtype uses `entityType`.
+- Claims have source-backed evidence when possible and non-source/non-report pages list `sourceIds`.
 - `wiki_compile` completed after the authoring change.
 - `wiki_lint` reports the vault is valid or only has clearly explained non-blocking warnings.

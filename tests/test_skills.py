@@ -39,10 +39,16 @@ EXPECTED_TOOLS = {
 }
 
 FORBIDDEN_REFERENCES = {
-    "openclaw",
     "claude",
-    "bridge",
     "unsafe-local",
+}
+
+SCHEMA_TERMS = {
+    "pageType: entity",
+    "entityType: person",
+    "sourceIds",
+    "claims",
+    "evidence",
 }
 
 
@@ -119,3 +125,24 @@ def test_skill_frontmatter_uses_required_names_and_descriptions():
         frontmatter = text.split("\n---\n", 1)[0]
         assert f"name: {name}" in frontmatter
         assert "description: Use when " in frontmatter
+
+
+def test_skill_docs_describe_openclaw_compatible_schema_without_page_type_person():
+    ctx = _registered_context()
+
+    for skill_name in ("wiki-authoring", "wiki-maintainer"):
+        text = _read_skill_text(ctx.skills[skill_name]["path"])
+        assert "OpenClaw-compatible" in text
+
+    authoring = _read_skill_text(ctx.skills["wiki-authoring"]["path"])
+    for term in SCHEMA_TERMS:
+        assert term in authoring
+    assert "pageType: person" not in authoring
+
+    search = _read_skill_text(ctx.skills["wiki-search"]["path"])
+    assert "Search first" in search
+    assert "claim ID" in search
+
+    maintainer = _read_skill_text(ctx.skills["wiki-maintainer"]["path"])
+    for term in ("wiki_status", "wiki_compile", "wiki_lint", "wiki_reindex", "search smoke"):
+        assert term in maintainer

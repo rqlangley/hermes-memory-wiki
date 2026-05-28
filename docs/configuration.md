@@ -236,6 +236,10 @@ Practical options today:
 - For direct Python integrations, construct `MemoryWikiConfig(embeddings=EmbeddingConfig(enabled=False), search=SearchConfig(default_search_mode="keyword"))` or pass the equivalent raw config to `load_config()`.
 - `OPENAI_API_KEY` is not required for keyword search, vault initialization, compile, get, apply, status, or lint workflows.
 
+## Wiki schema
+
+Vaults use the OpenClaw-compatible directory-derived schema documented in [Schema](schema.md). In short: pages under `entities/` use `pageType: entity` and store subtypes such as `person` in `entityType`; pages under `concepts/`, `syntheses/`, `sources/`, and `reports/` use matching broad `pageType` values.
+
 ## Initialize and maintain the vault
 
 After installing and enabling the plugin/toolset, initialize the vault from a fresh Hermes session:

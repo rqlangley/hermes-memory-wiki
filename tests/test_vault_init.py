@@ -13,7 +13,10 @@ REQUIRED_DIRECTORIES = [
     "concepts",
     "syntheses",
     "reports",
+    "_attachments",
+    "_views",
     ".hermes-wiki",
+    ".hermes-wiki/locks",
     ".hermes-wiki/cache",
     ".hermes-wiki/vector",
 ]
@@ -58,6 +61,72 @@ def test_initialization_creates_required_directories_and_files(tmp_path):
     state = json.loads((root / ".hermes-wiki" / "state.json").read_text())
     assert state["version"] == 1
     assert state["createdAt"] == "2026-05-27T12:30:45+00:00"
+
+
+def test_agents_guidance_matches_openclaw_parity_with_hermes_paths(tmp_path):
+    root = tmp_path / "vault"
+
+    initialize_vault(_config(root), now=_init_time())
+
+    agents = (root / "AGENTS.md").read_text()
+    assert "generated blocks" in agents
+    assert "plugin-owned" in agents
+    assert "Preserve human notes" in agents
+    assert "source-backed claims" in agents
+    assert "structured `claims` with evidence" in agents
+    assert ".hermes-wiki/cache/agent-digest.json" in agents
+    assert "claims.jsonl" in agents
+    assert "markdown pages are the human view" in agents
+    assert "entityType" in agents
+    assert "pageType" in agents
+    assert "entity subtype" in agents
+
+
+def test_wiki_overview_explains_architecture_and_taxonomy(tmp_path):
+    root = tmp_path / "vault"
+
+    initialize_vault(_config(root), now=_init_time())
+
+    wiki = (root / "WIKI.md").read_text()
+    assert "Hermes memory-wiki" in wiki
+    assert "## Architecture" in wiki
+    assert "evidence layer" in wiki
+    assert "human-readable synthesis layer" in wiki
+    assert ".hermes-wiki/cache/agent-digest.json" in wiki
+    assert "## Taxonomy" in wiki
+    assert "entities/" in wiki
+    assert "pageType: entity" in wiki
+    assert "entityType" in wiki
+    assert "concepts/" in wiki
+    assert "syntheses/" in wiki
+    assert "sources/" in wiki
+    assert "reports/" in wiki
+    assert "<!-- hermes:human:start -->" in wiki
+    assert "<!-- hermes:human:end -->" in wiki
+
+
+def test_index_contains_managed_index_block_markers(tmp_path):
+    root = tmp_path / "vault"
+
+    initialize_vault(_config(root), now=_init_time())
+
+    index = (root / "index.md").read_text()
+    assert "<!-- hermes:wiki:index:start -->" in index
+    assert "<!-- hermes:wiki:index:end -->" in index
+
+
+@pytest.mark.parametrize("relative_path", ["AGENTS.md", "WIKI.md", "index.md", "inbox.md"])
+def test_existing_starter_files_are_not_overwritten(tmp_path, relative_path):
+    root = tmp_path / "vault"
+    root.mkdir()
+    starter = root / relative_path
+    original = f"# Custom {relative_path}\n\nDo not replace this.\n"
+    starter.write_text(original)
+
+    result = initialize_vault(_config(root), now=_init_time())
+
+    assert starter.read_text() == original
+    assert starter not in result.created_files
 
 
 def test_second_initialization_is_idempotent(tmp_path):

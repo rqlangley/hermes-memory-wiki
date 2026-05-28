@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -11,7 +12,7 @@ from typing import Any, Sequence
 
 from hermes_memory_wiki.config import MemoryWikiConfig
 from hermes_memory_wiki.markdown import WikiMarkdownError
-from hermes_memory_wiki.schema import WikiPageSummary, to_page_summary
+from hermes_memory_wiki.schema import WikiPageSummary, infer_page_kind, to_page_summary
 from hermes_memory_wiki.vault import METADATA_DIRECTORY, list_wiki_markdown_files
 from hermes_memory_wiki.vector_index import SearchDocument, build_search_documents
 
@@ -104,7 +105,7 @@ def _read_pages_with_schema_issues(root: Path) -> _ReadResult:
             issues.append(
                 LintIssue(
                     severity="error",
-                    category="schema",
+                    category="structure",
                     code="invalid-markdown",
                     message=f"Invalid wiki markdown: {error}",
                     path=relative_path,
@@ -112,8 +113,68 @@ def _read_pages_with_schema_issues(root: Path) -> _ReadResult:
             )
             continue
         if summary is not None:
+            issues.extend(_structure_issues(summary))
+            page_type = summary.page_type
+            if not page_type:
+                issues.append(
+                    LintIssue(
+                        severity="error",
+                        category="structure",
+                        code="missing-page-type",
+                        message=f"Missing pageType; expected {summary.kind} for {relative_path}.",
+                        path=relative_path,
+                        page_id=summary.id,
+                        details={"expected": summary.kind},
+                    )
+                )
+            elif page_type != summary.kind:
+                issues.append(
+                    LintIssue(
+                        severity="error",
+                        category="structure",
+                        code="page-type-mismatch",
+                        message=f"pageType {page_type!r} must match directory-derived kind {summary.kind!r}.",
+                        path=relative_path,
+                        page_id=summary.id,
+                        details={"expected": summary.kind, "actual": page_type},
+                    )
+                )
             pages.append(summary)
     return _ReadResult(pages=pages, issues=issues)
+
+
+def _structure_issues(summary: WikiPageSummary) -> list[LintIssue]:
+    """Return required frontmatter errors without trusting derived fallbacks."""
+    issues: list[LintIssue] = []
+    if not _has_nonempty_frontmatter_string(summary, "id"):
+        issues.append(
+            LintIssue(
+                severity="error",
+                category="structure",
+                code="missing-id",
+                message="Missing required id frontmatter field.",
+                path=summary.path,
+                details={"field": "id"},
+            )
+        )
+    if not _has_nonempty_frontmatter_string(summary, "title"):
+        issues.append(
+            LintIssue(
+                severity="error",
+                category="structure",
+                code="missing-title",
+                message="Missing required title frontmatter field.",
+                path=summary.path,
+                page_id=summary.id,
+                details={"field": "title"},
+            )
+        )
+    return issues
+
+
+def _has_nonempty_frontmatter_string(summary: WikiPageSummary, field_name: str) -> bool:
+    value = summary.frontmatter.get(field_name)
+    return isinstance(value, str) and bool(value.strip())
 
 
 def _duplicate_id_issues(pages: Sequence[WikiPageSummary]) -> list[LintIssue]:
@@ -127,7 +188,7 @@ def _duplicate_id_issues(pages: Sequence[WikiPageSummary]) -> list[LintIssue]:
             issues.append(
                 LintIssue(
                     severity="error",
-                    category="schema",
+                    category="structure",
                     code="duplicate-id",
                     message=f"Duplicate page id {page_id}: {', '.join(sorted_paths)}",
                     details={"id": page_id, "paths": sorted_paths},
@@ -145,7 +206,7 @@ def _duplicate_id_issues(pages: Sequence[WikiPageSummary]) -> list[LintIssue]:
             issues.append(
                 LintIssue(
                     severity="error",
-                    category="schema",
+                    category="structure",
                     code="duplicate-claim-id",
                     message=f"Duplicate claim id {claim_id}: {', '.join(paths)}",
                     claim_id=claim_id,
@@ -163,12 +224,12 @@ def _page_health_issues(pages: Sequence[WikiPageSummary]) -> list[LintIssue]:
             issues.append(
                 LintIssue(
                     severity="issue",
-                    category="low-confidence",
+                    category="quality",
                     code="low-confidence",
                     message=f"Page confidence is below {LOW_CONFIDENCE_THRESHOLD}.",
                     path=page.path,
                     page_id=page.id,
-                    details={"confidence": page.confidence},
+                    details={"confidence": page.confidence, "scope": "page"},
                 )
             )
         for claim in page.claims:
@@ -177,7 +238,7 @@ def _page_health_issues(pages: Sequence[WikiPageSummary]) -> list[LintIssue]:
                     LintIssue(
                         severity="warning",
                         category="provenance",
-                        code="missing-claim-evidence",
+                        code="claim-missing-evidence",
                         message=f"Claim has no evidence: {claim.text}",
                         path=page.path,
                         page_id=page.id,
@@ -188,13 +249,26 @@ def _page_health_issues(pages: Sequence[WikiPageSummary]) -> list[LintIssue]:
                 issues.append(
                     LintIssue(
                         severity="issue",
-                        category="low-confidence",
+                        category="quality",
                         code="low-confidence",
                         message=f"Claim confidence is below {LOW_CONFIDENCE_THRESHOLD}: {claim.text}",
                         path=page.path,
                         page_id=page.id,
                         claim_id=claim.id,
-                        details={"confidence": claim.confidence},
+                        details={"confidence": claim.confidence, "scope": "claim"},
+                    )
+                )
+            if _is_stale(claim.updated_at, now):
+                issues.append(
+                    LintIssue(
+                        severity="issue",
+                        category="quality",
+                        code="stale-claim",
+                        message=f"Claim updatedAt is older than {STALE_AFTER.days} days: {claim.updated_at}",
+                        path=page.path,
+                        page_id=page.id,
+                        claim_id=claim.id,
+                        details={"updatedAt": claim.updated_at},
                     )
                 )
 
@@ -202,7 +276,7 @@ def _page_health_issues(pages: Sequence[WikiPageSummary]) -> list[LintIssue]:
             issues.append(
                 LintIssue(
                     severity="issue",
-                    category="contradiction",
+                    category="contradictions",
                     code="contradiction",
                     message=f"Open contradiction: {contradiction}",
                     path=page.path,
@@ -213,7 +287,7 @@ def _page_health_issues(pages: Sequence[WikiPageSummary]) -> list[LintIssue]:
             issues.append(
                 LintIssue(
                     severity="issue",
-                    category="open-question",
+                    category="open-questions",
                     code="open-question",
                     message=f"Open question: {question}",
                     path=page.path,
@@ -224,7 +298,7 @@ def _page_health_issues(pages: Sequence[WikiPageSummary]) -> list[LintIssue]:
             issues.append(
                 LintIssue(
                     severity="issue",
-                    category="stale",
+                    category="quality",
                     code="stale-updated-at",
                     message=f"Page updatedAt is older than {STALE_AFTER.days} days: {page.updated_at}",
                     path=page.path,
@@ -232,32 +306,87 @@ def _page_health_issues(pages: Sequence[WikiPageSummary]) -> list[LintIssue]:
                     details={"updatedAt": page.updated_at},
                 )
             )
+        if page.kind not in {"source", "report"} and not page.source_ids:
+            issues.append(
+                LintIssue(
+                    severity="warning",
+                    category="provenance",
+                    code="missing-source-ids",
+                    message="Page is missing sourceIds for provenance.",
+                    path=page.path,
+                    page_id=page.id,
+                    details={"field": "sourceIds"},
+                )
+            )
+        issues.extend(_source_provenance_issues(page))
     return issues
+
+
+def _source_provenance_issues(page: WikiPageSummary) -> list[LintIssue]:
+    if page.kind != "source" or not page.source_type:
+        return []
+    required_fields_by_source_type = {
+        "memory-bridge": ("bridgeRelativePath", "bridgeWorkspaceDir"),
+        "memory-bridge-events": ("bridgeRelativePath", "bridgeWorkspaceDir"),
+        "memory-unsafe-local": ("unsafeLocalConfiguredPath", "unsafeLocalRelativePath"),
+        "unsafe-local": ("unsafeLocalConfiguredPath", "unsafeLocalRelativePath"),
+    }
+    required_fields = required_fields_by_source_type.get(page.source_type)
+    if required_fields is None:
+        return []
+    return [
+        LintIssue(
+            severity="warning",
+            category="provenance",
+            code="missing-source-provenance",
+            message=f"Source type {page.source_type} is missing provenance field {field_name}.",
+            path=page.path,
+            page_id=page.id,
+            details={"sourceType": page.source_type, "field": field_name},
+        )
+        for field_name in required_fields
+        if not _has_nonempty_frontmatter_string(page, field_name)
+    ]
 
 
 def _broken_link_issues(pages: Sequence[WikiPageSummary]) -> list[LintIssue]:
     page_ids = {page.id for page in pages}
     page_paths = {page.path for page in pages}
+    page_titles = {page.title for page in pages if page.title}
+    page_stems = {Path(page.path).stem for page in pages}
     issues: list[LintIssue] = []
     for page in pages:
         for source_id in page.source_ids:
             if source_id not in page_ids:
-                issues.append(_broken_link_issue(page, None, source_id))
+                issues.append(_broken_source_link_issue(page, None, source_id))
         for claim in page.claims:
             for evidence in claim.evidence:
                 if evidence.source_id and evidence.source_id not in page_ids:
-                    issues.append(_broken_link_issue(page, claim.id, evidence.source_id))
+                    issues.append(_broken_source_link_issue(page, claim.id, evidence.source_id))
                 if evidence.path and evidence.path not in page_paths:
-                    issues.append(_broken_link_issue(page, claim.id, evidence.path))
+                    issues.append(_broken_source_link_issue(page, claim.id, evidence.path))
+        for target in sorted(_wikilink_targets(page.body)):
+            if not _wikilink_resolves(target, page_paths, page_ids, page_titles, page_stems):
+                issues.append(
+                    LintIssue(
+                        severity="issue",
+                        category="links",
+                        code="broken-wikilink",
+                        message=f"Broken wikilink: {target}",
+                        path=page.path,
+                        page_id=page.id,
+                        details={"target": target},
+                    )
+                )
     return issues
 
 
-def _broken_link_issue(
+def _broken_source_link_issue(
     page: WikiPageSummary, claim_id: str | None, target: str
 ) -> LintIssue:
     return LintIssue(
         severity="issue",
-        category="broken-link",
+        category="links",
         code="broken-source-link",
         message=f"Broken source link: {target}",
         path=page.path,
@@ -265,6 +394,29 @@ def _broken_link_issue(
         claim_id=claim_id,
         details={"target": target},
     )
+
+
+def _wikilink_targets(body: str) -> list[str]:
+    targets: list[str] = []
+    for match in re.finditer(r"\[\[([^\]]+)\]\]", body):
+        target = match.group(1).split("|", 1)[0].strip()
+        if target:
+            targets.append(target)
+    return targets
+
+
+def _wikilink_resolves(
+    target: str,
+    page_paths: set[str],
+    page_ids: set[str],
+    page_titles: set[str],
+    page_stems: set[str],
+) -> bool:
+    if target in page_paths or target in page_ids or target in page_titles or target in page_stems:
+        return True
+    if infer_page_kind(target) is not None and not target.endswith(".md"):
+        return f"{target}.md" in page_paths
+    return False
 
 
 def _vector_index_issues(root: Path, pages: Sequence[WikiPageSummary]) -> list[LintIssue]:
@@ -282,7 +434,7 @@ def _vector_index_issues(root: Path, pages: Sequence[WikiPageSummary]) -> list[L
         return [
             LintIssue(
                 severity="warning",
-                category="vector-index",
+                category="quality",
                 code="stale-vector-index",
                 message=f"Vector index could not be inspected: {error}",
                 details={"indexPath": db_path.relative_to(root).as_posix()},
@@ -308,7 +460,7 @@ def _vector_index_issues(root: Path, pages: Sequence[WikiPageSummary]) -> list[L
             doc_id,
             LintIssue(
                 severity="warning",
-                category="vector-index",
+                category="quality",
                 code="stale-vector-index",
                 message="Vector index contains a document that is no longer in the wiki.",
                 details={"documentId": doc_id},
@@ -326,7 +478,7 @@ def _stored_vector_documents(db_path: Path) -> dict[str, str]:
 def _unsafe_vector_index_issue(root: Path, path: Path) -> LintIssue:
     return LintIssue(
         severity="warning",
-        category="vector-index",
+        category="quality",
         code="stale-vector-index",
         message="Vector index was not inspected because its metadata path is a symlink.",
         details={"indexPath": path.relative_to(root).as_posix()},
@@ -336,7 +488,7 @@ def _unsafe_vector_index_issue(root: Path, path: Path) -> LintIssue:
 def _vector_issue(doc: SearchDocument, message: str) -> LintIssue:
     return LintIssue(
         severity="warning",
-        category="vector-index",
+        category="quality",
         code="stale-vector-index",
         message=message,
         path=doc.page_path,

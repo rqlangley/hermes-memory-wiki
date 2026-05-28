@@ -13,7 +13,7 @@ import json
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-from types import SimpleNamespace
+from textwrap import dedent
 from typing import Any, Iterator, Mapping, Sequence
 
 from hermes_memory_wiki import plugin, tools
@@ -36,12 +36,19 @@ class FakeContext:
 class _OfflineSmokeEmbeddingProvider:
     """Deterministic no-network embedding provider for smoke workflow search."""
 
-    provider = "offline-smoke"
+    provider = "fake"
     model = "offline-smoke"
     dimensions: int | None = 3
 
     def embed_texts(self, texts: Sequence[str]) -> list[list[float]]:
-        return [[float(len(text) % 7), float(text.count(" ") + 1), 1.0] for text in texts]
+        return [
+            [
+                float(len(text) % 7),
+                float(sum(ord(char) for char in text) % 11),
+                float(text.lower().count("claim") + 1),
+            ]
+            for text in texts
+        ]
 
 
 @contextmanager
@@ -52,16 +59,11 @@ def _offline_tools() -> Iterator[None]:
     original_search_wiki = tools.search_wiki
     offline_provider = _OfflineSmokeEmbeddingProvider()
 
-    def fake_reindex_vault(config: Any, *, force: bool = False) -> SimpleNamespace:
-        return SimpleNamespace(
-            embedded_count=0,
-            skipped_count=0,
-            deleted_count=0,
-            provider="fake",
-            model="offline-smoke",
-            dimensions=3,
-            diagnostics=["offline smoke reindex stub used", f"force={force}"],
-        )
+    def fake_reindex_vault(config: Any, *, force: bool = False) -> Any:
+        result = original_reindex(config, offline_provider, force=force)
+        result.diagnostics.append("offline smoke reindex stub used")
+        result.diagnostics.append(f"force={force}")
+        return result
 
     def offline_search_wiki(config: Any, query: str, **kwargs: Any) -> Any:
         results, diagnostics = original_search_wiki(
@@ -92,10 +94,79 @@ def _decode_tool_response(raw: str) -> dict[str, Any]:
     return payload
 
 
-def _call_tool(ctx: FakeContext, name: str, args: Mapping[str, Any]) -> dict[str, Any]:
+def _call_tool(
+    ctx: FakeContext,
+    name: str,
+    args: Mapping[str, Any],
+    *,
+    step_name: str | None = None,
+    extra: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     handler = ctx.tools[name]["handler"]
     payload = _decode_tool_response(handler(dict(args)))
-    return {"name": name, "ok": True, "text": payload["text"], "details": payload["details"]}
+    step = {"name": step_name or name, "ok": True, "text": payload["text"], "details": payload["details"]}
+    if extra:
+        step.update(dict(extra))
+    return step
+
+
+def _write_page(vault_path: Path, relative_path: str, content: str) -> dict[str, Any]:
+    path = vault_path / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(dedent(content).lstrip(), encoding="utf-8")
+    return {
+        "ok": True,
+        "text": f"Wrote {relative_path}.",
+        "details": {"path": relative_path, "bytes": path.stat().st_size},
+        "path": relative_path,
+    }
+
+
+def _assert_generated_outputs(vault_path: Path) -> dict[str, Any]:
+    expected = [
+        "index.md",
+        "entities/index.md",
+        "concepts/index.md",
+        "syntheses/index.md",
+        "sources/index.md",
+        "reports/open-questions.md",
+        "reports/contradictions.md",
+        "reports/low-confidence.md",
+        "reports/claim-health.md",
+        ".hermes-wiki/cache/agent-digest.json",
+        ".hermes-wiki/cache/claims.jsonl",
+        ".hermes-wiki/cache/lint-report.json",
+    ]
+    files = [relative_path for relative_path in expected if (vault_path / relative_path).is_file()]
+    missing = sorted(set(expected) - set(files))
+    if missing:
+        raise AssertionError(f"Missing generated smoke outputs: {', '.join(missing)}")
+    return {
+        "name": "assert_generated_outputs",
+        "ok": True,
+        "text": "Generated reports and digests exist.",
+        "details": {"files": files},
+        "files": files,
+    }
+
+
+def _assert_no_structural_errors(vault_path: Path) -> dict[str, Any]:
+    lint_path = vault_path / ".hermes-wiki" / "cache" / "lint-report.json"
+    payload = json.loads(lint_path.read_text(encoding="utf-8"))
+    structural_errors = [
+        issue
+        for issue in payload.get("issues", [])
+        if issue.get("severity") == "error" and issue.get("category") == "structure"
+    ]
+    if structural_errors:
+        raise AssertionError(f"Structural lint errors found: {structural_errors}")
+    return {
+        "name": "assert_no_structural_errors",
+        "ok": True,
+        "text": "No structural lint errors found.",
+        "details": {"structuralErrors": structural_errors},
+        "structuralErrors": structural_errors,
+    }
 
 
 def _run(vault_path: Path) -> dict[str, Any]:
@@ -113,6 +184,107 @@ def _run(vault_path: Path) -> dict[str, Any]:
     base_args = {"vaultPath": str(vault_path)}
 
     steps.append(_call_tool(ctx, "wiki_init", base_args))
+    source_id = "source.openclaw-parity-notes"
+    steps.append(
+        {
+            "name": "write_source_page",
+            **_write_page(
+                vault_path,
+                "sources/openclaw-parity-notes.md",
+                f"""
+                ---
+                id: {source_id}
+                title: OpenClaw Parity Notes
+                pageType: source
+                sourceType: hand-written-smoke
+                status: active
+                confidence: 1.0
+                ---
+                # OpenClaw Parity Notes
+
+                These hand-written source notes stand in for deferred source ingest.
+                They state that Ada Lovelace is associated with the Analytical Engine
+                and that source-backed claims should preserve evidence links.
+                """,
+            ),
+        }
+    )
+    steps.append(
+        {
+            "name": "write_entity_page",
+            **_write_page(
+                vault_path,
+                "entities/ada-lovelace.md",
+                f"""
+                ---
+                id: entity.ada-lovelace
+                title: Ada Lovelace
+                pageType: entity
+                entityType: person
+                aliases:
+                  - Enchantress of Numbers
+                  - Countess Lovelace
+                sourceIds:
+                  - {source_id}
+                confidence: 0.95
+                status: active
+                claims:
+                  - id: claim.ada-associated-analytical-engine
+                    text: Ada Lovelace is associated with the Analytical Engine.
+                    status: active
+                    confidence: 0.9
+                    evidence:
+                      - kind: source
+                        sourceId: {source_id}
+                        path: sources/openclaw-parity-notes.md
+                        lines: "5-7"
+                        weight: 1
+                        note: Hand-written smoke source page.
+                ---
+                # Ada Lovelace
+
+                Ada Lovelace is represented as an OpenClaw-compatible person entity.
+                """,
+            ),
+        }
+    )
+    steps.append(
+        {
+            "name": "write_concept_page",
+            **_write_page(
+                vault_path,
+                "concepts/analytical-engine.md",
+                f"""
+                ---
+                id: concept.analytical-engine
+                title: Analytical Engine
+                pageType: concept
+                aliases:
+                  - Babbage Engine
+                sourceIds:
+                  - {source_id}
+                confidence: 0.9
+                status: active
+                claims:
+                  - id: claim.analytical-engine-source-backed-claims
+                    text: The Analytical Engine page demonstrates source-backed claim parity.
+                    status: active
+                    confidence: 0.86
+                    evidence:
+                      - kind: source
+                        sourceId: {source_id}
+                        path: sources/openclaw-parity-notes.md
+                        lines: "6-8"
+                        weight: 1
+                        note: Concept claim evidence for parity smoke.
+                ---
+                # Analytical Engine
+
+                A concept page used by the fake Hermes parity smoke workflow.
+                """,
+            ),
+        }
+    )
     steps.append(
         _call_tool(
             ctx,
@@ -120,27 +292,67 @@ def _run(vault_path: Path) -> dict[str, Any]:
             {
                 **base_args,
                 "op": "create_synthesis",
-                "title": "Offline Smoke Synthesis",
-                "body": "This page is created by the offline fake Hermes smoke workflow.",
-                "sourceIds": ["smoke.source"],
+                "title": "OpenClaw Parity Synthesis",
+                "body": "Ada Lovelace and the Analytical Engine are connected by source-backed claims.",
+                "sourceIds": [source_id],
                 "claims": [
                     {
-                        "id": "claim.offline-smoke",
-                        "text": "The offline smoke workflow created this synthesis.",
-                        "confidence": 1.0,
-                        "evidence": [{"sourceId": "smoke.source", "quote": "offline smoke"}],
+                        "id": "claim.openclaw-parity-synthesis",
+                        "text": "The fake Hermes smoke workflow validates OpenClaw parity end to end.",
+                        "status": "active",
+                        "confidence": 0.92,
+                        "evidence": [
+                            {
+                                "kind": "source",
+                                "sourceId": source_id,
+                                "path": "sources/openclaw-parity-notes.md",
+                                "lines": "1-8",
+                                "weight": 1,
+                            }
+                        ],
                     }
                 ],
-                "status": "stable",
+                "status": "active",
+                "confidence": 0.9,
             },
         )
     )
     steps.append(_call_tool(ctx, "wiki_compile", base_args))
+    steps.append(_call_tool(ctx, "wiki_lint", base_args))
     with _offline_tools():
         steps.append(_call_tool(ctx, "wiki_reindex", {**base_args, "force": True}))
-        steps.append(_call_tool(ctx, "wiki_search", {**base_args, "query": "offline smoke", "searchMode": "hybrid"}))
-    steps.append(_call_tool(ctx, "wiki_get", {**base_args, "lookup": "synthesis.offline-smoke-synthesis"}))
-    steps.append(_call_tool(ctx, "wiki_lint", base_args))
+        for step_name, query in [
+            ("search_entity_name", "Ada Lovelace"),
+            ("search_concept_name", "Analytical Engine"),
+            ("search_alias", "Enchantress of Numbers"),
+            ("search_claim_text", "source-backed claim parity"),
+        ]:
+            steps.append(
+                _call_tool(
+                    ctx,
+                    "wiki_search",
+                    {**base_args, "query": query, "searchMode": "hybrid"},
+                    step_name=step_name,
+                    extra={"query": query},
+                )
+            )
+    for step_name, lookup in [
+        ("get_by_id", "entity.ada-lovelace"),
+        ("get_by_path", "concepts/analytical-engine.md"),
+        ("get_by_title", "OpenClaw Parity Synthesis"),
+        ("get_by_alias", "Enchantress of Numbers"),
+    ]:
+        steps.append(
+            _call_tool(
+                ctx,
+                "wiki_get",
+                {**base_args, "lookup": lookup},
+                step_name=step_name,
+                extra={"lookup": lookup},
+            )
+        )
+    steps.append(_assert_generated_outputs(vault_path))
+    steps.append(_assert_no_structural_errors(vault_path))
 
     return {
         "ok": True,

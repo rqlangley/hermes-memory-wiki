@@ -8,6 +8,7 @@ All commands assume you are running from the repository root and use the project
 
 - Keep the plugin installable as a Hermes user plugin without modifying Hermes Agent core files.
 - Do not add OpenClaw runtime dependencies.
+- Preserve the OpenClaw-compatible wiki schema documented in `docs/schema.md`: directory-derived broad page kinds, `pageType` matching those kinds, and entity subtypes in `entityType`.
 - Prefer deterministic, local behavior for development and tests. Network/API-backed behavior must be explicit opt-in.
 - Keep documentation and code aligned with the current user-plugin limitations described in the installation and configuration guides.
 

@@ -65,9 +65,11 @@ def test_fallback_snippet_chooses_first_meaningful_body_line() -> None:
 
 def test_page_search_text_includes_summary_fields_claims_and_evidence() -> None:
     page = WikiPageSummary(
-        path="people/langley.md",
-        kind="person",
-        id="person:langley",
+        path="entities/langley.md",
+        kind="entity",
+        id="entity.langley",
+        page_type="entity",
+        entity_type="person",
         title="Langley",
         source_ids=["source-alpha"],
         aliases=["LGL"],
@@ -101,8 +103,9 @@ def test_page_search_text_includes_summary_fields_claims_and_evidence() -> None:
 
     for expected in [
         "Langley",
-        "people/langley.md",
-        "person:langley",
+        "entities/langley.md",
+        "entity.langley",
+        "entity",
         "person",
         "source-alpha",
         "LGL",
@@ -183,6 +186,8 @@ def _page(
         source_ids=source_ids or [],
         claims=claims or [],
         aliases=aliases or [],
+        page_type="concept",
+        entity_type=None,
     )
 
 
@@ -215,6 +220,34 @@ def test_claim_text_match_returns_matched_claim_metadata() -> None:
     assert result.matched_claim_id == "claim-prefers-pytest"
     assert result.snippet == "Prefers pytest for deterministic validation."
     assert result.metadata["matchedClaim"]["id"] == "claim-prefers-pytest"
+
+
+def test_keyword_result_metadata_includes_openclaw_page_fields() -> None:
+    page = WikiPageSummary(
+        path="entities/ada.md",
+        kind="entity",
+        id="entity.ada",
+        page_type="entity",
+        entity_type="person",
+        title="Ada Lovelace",
+        body="analytical engine needle",
+        source_ids=["source.menabrea"],
+        confidence=0.91,
+        status="active",
+        updated_at="2026-05-28T00:00:00Z",
+    )
+
+    result = keyword_search([page], "needle")[0]
+
+    assert result.kind == "entity"
+    assert result.metadata["id"] == "entity.ada"
+    assert result.metadata["kind"] == "entity"
+    assert result.metadata["pageType"] == "entity"
+    assert result.metadata["entityType"] == "person"
+    assert result.metadata["sourceIds"] == ["source.menabrea"]
+    assert result.metadata["confidence"] == 0.91
+    assert result.metadata["status"] == "active"
+    assert result.metadata["updatedAt"] == "2026-05-28T00:00:00Z"
 
 
 def test_confidence_boosts_claim_score() -> None:
@@ -255,9 +288,11 @@ def test_nonmatching_pages_score_zero_and_are_filtered() -> None:
 
 def test_find_person_mode_boosts_person_like_pages_and_identifier_matches() -> None:
     person = WikiPageSummary(
-        path="people/langley.md",
-        kind="person",
-        id="person:langley",
+        path="entities/langley.md",
+        kind="entity",
+        id="entity.langley",
+        page_type="entity",
+        entity_type="person",
         title="Langley",
         body="Knows atlas routing.",
         aliases=["LGL"],
@@ -268,14 +303,16 @@ def test_find_person_mode_boosts_person_like_pages_and_identifier_matches() -> N
 
     assert score_page(person, "langley", mode="find-person") > score_page(person, "langley", mode="auto")
     assert score_page(plain, "langley", mode="find-person") < score_page(plain, "langley", mode="auto")
-    assert keyword_search([plain, person], "langley", mode="find-person")[0].path == "people/langley.md"
+    assert keyword_search([plain, person], "langley", mode="find-person")[0].path == "entities/langley.md"
 
 
 def test_route_question_mode_boosts_routing_and_best_used_for_matches() -> None:
     routed = WikiPageSummary(
-        path="people/routing-owner.md",
-        kind="person",
-        id="person:routing-owner",
+        path="entities/routing-owner.md",
+        kind="entity",
+        id="entity.routing-owner",
+        page_type="entity",
+        entity_type="person",
         title="Routing Owner",
         body="General ownership notes mention invoice triage.",
         best_used_for=["invoice escalation"],
@@ -286,7 +323,7 @@ def test_route_question_mode_boosts_routing_and_best_used_for_matches() -> None:
     body_only = _page("topics/body-only.md", "Body only", body="invoice triage")
 
     assert score_page(routed, "invoice triage", mode="route-question") > score_page(routed, "invoice triage", mode="auto")
-    assert keyword_search([body_only, routed], "invoice triage", mode="route-question")[0].path == "people/routing-owner.md"
+    assert keyword_search([body_only, routed], "invoice triage", mode="route-question")[0].path == "entities/routing-owner.md"
 
 
 def test_source_evidence_mode_boosts_source_pages_and_evidence_matches() -> None:

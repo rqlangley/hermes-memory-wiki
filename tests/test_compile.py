@@ -20,28 +20,65 @@ def _write(root, relative_path, content):
     return path
 
 
-def _page(*, page_id, title, page_type, claims=()):
+def _page(
+    *,
+    page_id,
+    title,
+    page_type,
+    entity_type=None,
+    claims=(),
+    questions=(),
+    contradictions=(),
+    confidence=None,
+):
+    entity_type_line = f"entityType: {entity_type}\n" if entity_type else ""
+    confidence_line = f"confidence: {confidence}\n" if confidence is not None else ""
+    question_lines = ""
+    if questions:
+        question_lines = "questions:\n" + "".join(f"  - {item}\n" for item in questions)
+    contradiction_lines = ""
+    if contradictions:
+        contradiction_lines = "contradictions:\n" + "".join(f"  - {item}\n" for item in contradictions)
     claim_lines = ""
     if claims:
         claim_lines = "claims:\n"
-        for claim_id, text in claims:
-            claim_lines += f"  - id: {claim_id}\n    text: {text}\n"
+        for claim in claims:
+            if len(claim) == 2:
+                claim_id, text = claim
+                claim_lines += f"  - id: {claim_id}\n    text: {text}\n"
+            else:
+                claim_id, text, status, claim_confidence, source_id, evidence_path = claim
+                claim_lines += (
+                    f"  - id: {claim_id}\n"
+                    f"    text: {text}\n"
+                    f"    status: {status}\n"
+                    f"    confidence: {claim_confidence}\n"
+                    f"    evidence:\n"
+                    f"      - kind: source\n"
+                    f"        sourceId: {source_id}\n"
+                    f"        path: {evidence_path}\n"
+                    f"        lines: 1-3\n"
+                    f"        weight: 1\n"
+                    f"        confidence: 0.9\n"
+                )
     return f"""---
 id: {page_id}
 title: {title}
 pageType: {page_type}
-{claim_lines}---
+{entity_type_line}{confidence_line}{question_lines}{contradiction_lines}{claim_lines}---
 # {title}
 
 Body for {title}.
 """
 
 
-def _page_with_anonymous_claim(*, page_id, title, page_type, claim_text):
+def _page_with_anonymous_claim(*, page_id, title, page_type, claim_text, entity_type=None):
+    entity_type_line = f"entityType: {entity_type}\n" if entity_type else ""
     return f"""---
 id: {page_id}
 title: {title}
 pageType: {page_type}
+{entity_type_line}
 claims:
   - text: {claim_text}
 ---
@@ -55,21 +92,29 @@ def _seed_vault(root):
     initialize_vault(_config(root))
     _write(
         root,
+        "sources/ada-notes.md",
+        _page(page_id="source.ada-notes", title="Ada Notes", page_type="source"),
+    )
+    _write(
+        root,
         "entities/ada.md",
         _page(
-            page_id="person:ada",
+            page_id="entity.ada",
             title="Ada Lovelace",
-            page_type="person",
-            claims=(("claim:ada-1", "Ada wrote notes."),),
+            page_type="entity",
+            entity_type="person",
+            claims=(("claim:ada-1", "Ada wrote notes.", "active", 0.8, "source.ada-notes", "sources/ada-notes.md"),),
+            questions=("Which notes should be canonical?",),
         ),
     )
     _write(
         root,
         "entities/babbage.md",
         _page(
-            page_id="person:babbage",
+            page_id="entity.babbage",
             title="Charles Babbage",
-            page_type="person",
+            page_type="entity",
+            entity_type="person",
         ),
     )
     _write(
@@ -80,7 +125,14 @@ def _seed_vault(root):
             title="Analytical Engine",
             page_type="concept",
             claims=(("claim:engine-1", "The engine was programmable."),),
+            contradictions=("Some sources call the design non-programmable.",),
+            confidence=0.4,
         ),
+    )
+    _write(
+        root,
+        "syntheses/programming.md",
+        _page(page_id="synthesis.programming", title="Programming Synthesis", page_type="synthesis"),
     )
 
 
@@ -105,13 +157,16 @@ def test_root_index_includes_page_counts(tmp_path):
 
     index = (root / "index.md").read_text(encoding="utf-8")
     assert result.vault_root == root
-    assert result.page_counts == {"concept": 1, "person": 2}
+    assert result.page_counts == {"concept": 1, "entity": 2, "report": 4, "source": 1, "synthesis": 1}
     assert result.claim_count == 2
-    assert "# Memory Wiki Index" in index
-    assert "- Total pages: 3" in index
+    assert "# Wiki Index" in index
+    assert "- Total pages: 9" in index
     assert "- Total claims: 2" in index
-    assert "- concept: 1" in index
-    assert "- person: 2" in index
+    assert "- Concepts: 1" in index
+    assert "- Entities: 2" in index
+    assert "- Reports: 4" in index
+    assert "- Sources: 1" in index
+    assert "- Syntheses: 1" in index
 
 
 def test_directory_indexes_list_pages_by_kind(tmp_path):
@@ -122,11 +177,33 @@ def test_directory_indexes_list_pages_by_kind(tmp_path):
 
     entities_index = (root / "entities" / "index.md").read_text(encoding="utf-8")
     concepts_index = (root / "concepts" / "index.md").read_text(encoding="utf-8")
-    assert "## person" in entities_index
-    assert "- [Ada Lovelace](ada.md) — person:ada" in entities_index
-    assert "- [Charles Babbage](babbage.md) — person:babbage" in entities_index
-    assert "## concept" in concepts_index
-    assert "- [Analytical Engine](engine.md) — concept:engine" in concepts_index
+    assert (root / "sources" / "index.md").exists()
+    assert (root / "syntheses" / "index.md").exists()
+    assert (root / "reports" / "index.md").exists()
+    assert "[Ada Lovelace](ada.md)" in entities_index
+    assert "[Charles Babbage](babbage.md)" in entities_index
+    assert "[Analytical Engine](engine.md)" in concepts_index
+
+
+def test_compile_generates_openclaw_like_reports(tmp_path):
+    root = tmp_path / "vault"
+    _seed_vault(root)
+
+    compile_vault(_config(root))
+
+    expected = {
+        "reports/open-questions.md": ("report.open-questions", "Open Questions", "Which notes should be canonical?"),
+        "reports/contradictions.md": ("report.contradictions", "Contradictions", "Some sources call the design non-programmable."),
+        "reports/low-confidence.md": ("report.low-confidence", "Low Confidence", "confidence 0.40"),
+        "reports/claim-health.md": ("report.claim-health", "Claim Health", "Claims missing evidence: 1"),
+    }
+    for relative_path, (page_id, title, expected_text) in expected.items():
+        text = (root / relative_path).read_text(encoding="utf-8")
+        assert "pageType: report" in text
+        assert f"id: {page_id}" in text
+        assert f"title: {title}" in text
+        assert "<!-- hermes:wiki:" in text
+        assert expected_text in text
 
 
 def test_agent_digest_json_includes_pages_and_claim_counts(tmp_path):
@@ -136,13 +213,14 @@ def test_agent_digest_json_includes_pages_and_claim_counts(tmp_path):
     compile_vault(_config(root))
 
     digest = json.loads((root / ".hermes-wiki" / "cache" / "agent-digest.json").read_text(encoding="utf-8"))
-    assert digest["pageCounts"] == {"concept": 1, "person": 2}
+    assert digest["pageCounts"] == {"concept": 1, "entity": 2, "report": 4, "source": 1, "synthesis": 1}
     assert digest["claimCount"] == 2
-    assert digest["pages"] == [
-        {"path": "concepts/engine.md", "id": "concept:engine", "title": "Analytical Engine", "kind": "concept", "claimCount": 1},
-        {"path": "entities/ada.md", "id": "person:ada", "title": "Ada Lovelace", "kind": "person", "claimCount": 1},
-        {"path": "entities/babbage.md", "id": "person:babbage", "title": "Charles Babbage", "kind": "person", "claimCount": 0},
-    ]
+    pages = {page["path"]: page for page in digest["pages"]}
+    assert pages["entities/ada.md"]["claimCount"] == 1
+    assert pages["entities/ada.md"]["questions"] == ["Which notes should be canonical?"]
+    assert pages["entities/ada.md"]["entityType"] == "person"
+    assert pages["concepts/engine.md"]["confidence"] == 0.4
+    assert digest["claimHealth"]["missingEvidence"] == 1
 
 
 def test_claims_jsonl_contains_one_claim_per_line(tmp_path):
@@ -162,18 +240,66 @@ def test_claims_jsonl_contains_one_claim_per_line(tmp_path):
             "text": "The engine was programmable.",
             "status": None,
             "confidence": None,
+            "evidence": [],
         },
         {
             "pagePath": "entities/ada.md",
-            "pageId": "person:ada",
+            "pageId": "entity.ada",
             "pageTitle": "Ada Lovelace",
             "claimId": "claim:ada-1",
             "claimDocumentId": "claim:entities/ada.md:claim:ada-1",
             "text": "Ada wrote notes.",
-            "status": None,
-            "confidence": None,
+            "status": "active",
+            "confidence": 0.8,
+            "evidence": [
+                {
+                    "kind": "source",
+                    "sourceId": "source.ada-notes",
+                    "path": "sources/ada-notes.md",
+                    "lines": "1-3",
+                    "weight": 1,
+                    "confidence": 0.9,
+                    "privacyTier": None,
+                    "updatedAt": None,
+                    "note": None,
+                    "text": None,
+                }
+            ],
         },
     ]
+
+
+def test_generated_blocks_are_replaced_without_overwriting_human_notes(tmp_path):
+    root = tmp_path / "vault"
+    _seed_vault(root)
+    _write(
+        root,
+        "reports/open-questions.md",
+        """---
+id: wrong
+title: Old
+pageType: concept
+---
+# Old
+
+<!-- hermes:wiki:open-questions:start -->
+stale generated content
+<!-- hermes:wiki:open-questions:end -->
+
+## Human Notes
+
+Keep this analyst note.
+""",
+    )
+
+    compile_vault(_config(root))
+
+    report = (root / "reports" / "open-questions.md").read_text(encoding="utf-8")
+    assert "id: report.open-questions" in report
+    assert "pageType: report" in report
+    assert "stale generated content" not in report
+    assert "Which notes should be canonical?" in report
+    assert "Keep this analyst note." in report
 
 
 def test_search_docs_jsonl_contains_page_and_claim_documents(tmp_path):
@@ -189,6 +315,12 @@ def test_search_docs_jsonl_contains_page_and_claim_documents(tmp_path):
         "page:entities/ada.md",
         "claim:entities/ada.md:claim:ada-1",
         "page:entities/babbage.md",
+        "page:reports/claim-health.md",
+        "page:reports/contradictions.md",
+        "page:reports/low-confidence.md",
+        "page:reports/open-questions.md",
+        "page:sources/ada-notes.md",
+        "page:syntheses/programming.md",
     ]
     assert {doc["docType"] for doc in docs} == {"page", "claim"}
     assert all("textHash" in doc for doc in docs)
@@ -277,9 +409,10 @@ def test_anonymous_claims_correlate_with_search_documents(tmp_path):
         root,
         "entities/anonymous.md",
         _page_with_anonymous_claim(
-            page_id="person:anonymous",
+            page_id="entity.anonymous",
             title="Anonymous Person",
-            page_type="person",
+            page_type="entity",
+            entity_type="person",
             claim_text="This claim has no explicit ID.",
         ),
     )
@@ -293,4 +426,4 @@ def test_anonymous_claims_correlate_with_search_documents(tmp_path):
     assert claims[0]["claimId"] != "claim-0"
     assert claims[0]["claimDocumentId"] == claim_doc["id"]
     assert claims[0]["claimId"] in claim_doc["text"]
-    assert claim_doc["metadata"]["claim_ordinal"] == 0
+    assert claim_doc["metadata"]["claimOrdinal"] == 0

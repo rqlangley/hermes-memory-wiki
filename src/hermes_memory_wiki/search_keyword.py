@@ -65,6 +65,8 @@ def build_page_search_text(page: WikiPageSummary) -> str:
     _append_text(values, page.path)
     _append_text(values, page.id)
     _append_text(values, page.kind)
+    _append_text(values, page.page_type)
+    _append_text(values, page.entity_type)
     _append_text(values, _body_without_generated_blocks(page.body))
     _append_many(values, page.aliases)
     _append_many(values, page.source_ids)
@@ -151,7 +153,13 @@ def keyword_search(
 
         metadata: dict[str, Any] = {
             "id": page.id,
+            "kind": page.kind,
+            "pageType": page.page_type,
+            "entityType": page.entity_type,
             "sourceIds": list(page.source_ids),
+            "confidence": page.confidence,
+            "status": page.status,
+            "updatedAt": page.updated_at,
             "claimCount": len(page.claims),
         }
         matched_claim_id = None
@@ -250,7 +258,7 @@ def _mode_boost_score(
 
 
 def _is_person_like(page: WikiPageSummary) -> bool:
-    return bool(page.kind.lower() == "person" or page.person or page.role or page.person_card is not None)
+    return bool(page.entity_type == "person" or page.person or page.role or page.person_card is not None)
 
 
 def _is_person_identifier_match(page: WikiPageSummary, query_lower: str, tokens: list[str]) -> bool:
@@ -394,7 +402,12 @@ def _token_hit_count(line: str, tokens: list[str]) -> int:
     return sum(1 for token in tokens if token in line)
 
 
-def _append_many(values: list[str], items: list[Any]) -> None:
+def _append_many(values: list[str], items: Any) -> None:
+    if items is None:
+        return
+    if isinstance(items, str):
+        _append_text(values, items)
+        return
     for item in items:
         _append_text(values, item)
 
