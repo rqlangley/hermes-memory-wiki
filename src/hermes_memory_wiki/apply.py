@@ -17,7 +17,7 @@ from hermes_memory_wiki.markdown import (
     render_wiki_markdown,
     replace_managed_block,
 )
-from hermes_memory_wiki.paths import safe_join, to_display_path
+from hermes_memory_wiki.paths import normalize_relative_path, safe_join, to_display_path
 from hermes_memory_wiki.vault import get_page
 
 
@@ -162,6 +162,7 @@ def _apply_update_metadata(config: MemoryWikiConfig, mutation: WikiMutation) -> 
     if page is None:
         raise FileNotFoundError(f"wiki page not found for lookup: {lookup}")
 
+    _reject_leaf_symlink(config, page.path)
     path = safe_join(config.vault_path, page.path)
     if not path.is_file():
         raise FileNotFoundError(f"wiki page not found at resolved path: {page.path}")
@@ -202,6 +203,7 @@ def _apply_create_synthesis(config: MemoryWikiConfig, mutation: WikiMutation) ->
     slug = _slugify(mutation.title)
     relative_path = f"syntheses/{slug}.md"
     page_id = f"synthesis.{slug}"
+    _reject_leaf_symlink(config, relative_path)
     path = safe_join(config.vault_path, relative_path)
     display_path = to_display_path(config.vault_path, path)
     _validate_synthesis_path(display_path)
@@ -250,6 +252,7 @@ def _apply_upsert_typed_page(config: MemoryWikiConfig, mutation: WikiMutation, *
             raise ValueError(f"lookup resolved to pageType {actual_page_type!r}; expected {page_type}")
         relative_path = page.path
         page_id = page.id
+        _reject_leaf_symlink(config, relative_path)
         path = safe_join(config.vault_path, relative_path)
         created = False
     else:
@@ -257,12 +260,14 @@ def _apply_upsert_typed_page(config: MemoryWikiConfig, mutation: WikiMutation, *
         directory = _page_type_directory(page_type)
         relative_path = f"{directory}/{slug}.md"
         page_id = f"{page_type}.{slug}"
+        _reject_leaf_symlink(config, relative_path)
         path = safe_join(config.vault_path, relative_path)
         created = not path.exists()
 
     display_path = to_display_path(config.vault_path, path)
     _validate_typed_page_path(display_path, page_type)
 
+    existing_doc: WikiMarkdown | None = None
     if path.exists():
         if not path.is_file():
             raise IsADirectoryError(f"wiki page path exists and is not a file: {path}")
@@ -273,24 +278,29 @@ def _apply_upsert_typed_page(config: MemoryWikiConfig, mutation: WikiMutation, *
         path.parent.mkdir(parents=True, exist_ok=True)
         existing_body = f"# {mutation.title}\n"
 
-    frontmatter = {
-        "id": page_id,
-        "title": mutation.title,
-        "pageType": page_type,
-        "sourceIds": mutation.source_ids,
-        "claims": mutation.claims,
-        "status": mutation.status,
-        "updatedAt": datetime.now(timezone.utc).isoformat(),
-    }
+    frontmatter = dict(existing_doc.frontmatter) if existing_doc else {}
+    frontmatter.update(
+        {
+            "id": page_id,
+            "title": mutation.title,
+            "pageType": page_type,
+            "sourceIds": mutation.source_ids,
+            "claims": mutation.claims,
+            "status": mutation.status,
+            "updatedAt": datetime.now(timezone.utc).isoformat(),
+        }
+    )
     if page_type == "entity":
         frontmatter["entityType"] = mutation.entity_type
-        if mutation.aliases:
-            frontmatter["aliases"] = mutation.aliases
-    if mutation.questions:
-        frontmatter["questions"] = mutation.questions
-    if mutation.contradictions:
-        frontmatter["contradictions"] = mutation.contradictions
-    if mutation.confidence is not None:
+        _set_or_remove(frontmatter, "aliases", mutation.aliases)
+    else:
+        frontmatter.pop("entityType", None)
+        frontmatter.pop("aliases", None)
+    _set_or_remove(frontmatter, "questions", mutation.questions)
+    _set_or_remove(frontmatter, "contradictions", mutation.contradictions)
+    if mutation.confidence is None:
+        frontmatter.pop("confidence", None)
+    else:
         frontmatter["confidence"] = mutation.confidence
 
     body = replace_managed_block(existing_body, "Summary", mutation.body)
@@ -305,6 +315,13 @@ def _set_or_remove(frontmatter: dict[str, Any], key: str, value: Any) -> None:
         frontmatter[key] = value
     else:
         frontmatter.pop(key, None)
+
+
+def _reject_leaf_symlink(config: MemoryWikiConfig, relative_path: str) -> None:
+    normalized = normalize_relative_path(relative_path)
+    leaf = config.vault_path.resolve() / normalized
+    if leaf.is_symlink():
+        raise ValueError(f"refusing to write wiki page through symlink: {relative_path}")
 
 
 def _required_string(raw: Mapping[str, Any], key: str) -> str:

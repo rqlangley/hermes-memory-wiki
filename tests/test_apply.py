@@ -177,6 +177,22 @@ def test_create_synthesis_preserves_existing_id_when_overwriting(tmp_path):
     assert doc.frontmatter["id"] == "synthesis.existing"
 
 
+def test_create_synthesis_rejects_leaf_symlink_without_mutating_target(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    target = config.vault_path / "target.md"
+    original = "target content\n"
+    target.write_text(original, encoding="utf-8")
+    link = config.vault_path / "syntheses" / "project-alpha-memory-rag.md"
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(target)
+
+    with pytest.raises(ValueError, match="symlink"):
+        apply_mutation(config, normalize_mutation(_base_raw()))
+
+    assert target.read_text(encoding="utf-8") == original
+
+
 @pytest.mark.parametrize(
     "claims,match",
     [
@@ -343,6 +359,44 @@ def test_upsert_entity_refresh_preserves_existing_id_and_human_notes(tmp_path):
     assert "Keep entity note." in doc.body
 
 
+def test_upsert_entity_refresh_preserves_custom_frontmatter(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    first = apply_mutation(config, normalize_mutation(_entity_raw()))
+    page_path = config.vault_path / first.path
+    text = page_path.read_text(encoding="utf-8")
+    text = text.replace(
+        "pageType: entity",
+        "pageType: entity\ncanonicalId: people/alice\nprivacyTier: private\ncustomField: keep-me",
+    )
+    page_path.write_text(text, encoding="utf-8")
+
+    apply_mutation(config, normalize_mutation(_entity_raw(body="Updated entity summary.", aliases=[])))
+
+    doc = parse_wiki_markdown(page_path.read_text(encoding="utf-8"))
+    assert doc.frontmatter["canonicalId"] == "people/alice"
+    assert doc.frontmatter["privacyTier"] == "private"
+    assert doc.frontmatter["customField"] == "keep-me"
+    assert doc.frontmatter["entityType"] == "person"
+    assert "aliases" not in doc.frontmatter
+
+
+def test_upsert_entity_rejects_leaf_symlink_without_mutating_target(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    target = config.vault_path / "target.md"
+    original = "target content\n"
+    target.write_text(original, encoding="utf-8")
+    link = config.vault_path / "entities" / "alice-example.md"
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(target)
+
+    with pytest.raises(ValueError, match="symlink"):
+        apply_mutation(config, normalize_mutation(_entity_raw()))
+
+    assert target.read_text(encoding="utf-8") == original
+
+
 def test_upsert_entity_lookup_updates_existing_entity_and_preserves_path_and_id(tmp_path):
     initialize_vault(_config(tmp_path / "vault"))
     config = _config(tmp_path / "vault")
@@ -445,6 +499,35 @@ def test_upsert_concept_preserves_existing_id_and_human_notes_on_refresh(tmp_pat
     assert doc.frontmatter["id"] == "concept.existing-memory"
     assert "Updated concept summary." in doc.body
     assert "Keep concept note." in doc.body
+
+
+def test_upsert_concept_refresh_preserves_custom_frontmatter_and_removes_entity_type(tmp_path):
+    initialize_vault(_config(tmp_path / "vault"))
+    config = _config(tmp_path / "vault")
+    first = apply_mutation(config, normalize_mutation(_concept_raw()))
+    page_path = config.vault_path / first.path
+    text = page_path.read_text(encoding="utf-8")
+    text = text.replace(
+        "pageType: concept",
+        "pageType: concept\ncanonicalId: concepts/ram\nprivacyTier: public\ncustomField: keep-me\nentityType: stale",
+    )
+    page_path.write_text(text, encoding="utf-8")
+
+    apply_mutation(
+        config,
+        normalize_mutation(
+            _concept_raw(body="Updated concept summary.", questions=[], contradictions=[], confidence=None)
+        ),
+    )
+
+    doc = parse_wiki_markdown(page_path.read_text(encoding="utf-8"))
+    assert doc.frontmatter["canonicalId"] == "concepts/ram"
+    assert doc.frontmatter["privacyTier"] == "public"
+    assert doc.frontmatter["customField"] == "keep-me"
+    assert "entityType" not in doc.frontmatter
+    assert "questions" not in doc.frontmatter
+    assert "contradictions" not in doc.frontmatter
+    assert "confidence" not in doc.frontmatter
 
 
 def test_upsert_concept_lookup_refuses_wrong_broad_page_type(tmp_path):

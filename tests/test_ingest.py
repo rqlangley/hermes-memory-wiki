@@ -87,6 +87,25 @@ def test_ingest_local_file_rejects_binary_looking_file(tmp_path):
     assert not (vault / "sources" / "binary.md").exists()
 
 
+def test_ingest_rejects_leaf_symlink_without_mutating_target(tmp_path):
+    vault = tmp_path / "vault"
+    initialize_vault(_config(vault))
+    target = vault / "target.md"
+    original = "target content\n"
+    target.write_text(original, encoding="utf-8")
+    link = vault / "sources" / "planning-chat.md"
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(target)
+
+    with pytest.raises(ValueError, match="symlink"):
+        ingest_source(
+            _config(vault),
+            {"sourceType": "conversation-summary", "title": "Planning Chat", "body": "Updated body."},
+        )
+
+    assert target.read_text(encoding="utf-8") == original
+
+
 def test_ingest_conversation_summary_requires_title_and_body_and_records_optional_metadata(tmp_path):
     vault = tmp_path / "vault"
     initialize_vault(_config(vault))

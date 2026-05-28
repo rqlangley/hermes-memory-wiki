@@ -16,7 +16,7 @@ from hermes_memory_wiki.markdown import (
     render_wiki_markdown,
     replace_managed_block,
 )
-from hermes_memory_wiki.paths import safe_join, to_display_path
+from hermes_memory_wiki.paths import normalize_relative_path, safe_join, to_display_path
 
 
 SUPPORTED_SOURCE_TYPES = {"local-file", "conversation-summary", "text"}
@@ -61,6 +61,7 @@ def ingest_source(config: MemoryWikiConfig, raw: Mapping[str, Any]) -> IngestRes
 
     slug = _slugify(title)
     relative_path = f"sources/{slug}.md"
+    _reject_leaf_symlink(config, relative_path)
     path = safe_join(config.vault_path, relative_path)
     display_path = to_display_path(config.vault_path, path)
     page_id = f"source.{slug}"
@@ -206,3 +207,10 @@ def _set_optional(frontmatter: dict[str, Any], key: str, value: Any) -> None:
         frontmatter.pop(key, None)
     else:
         frontmatter[key] = text
+
+
+def _reject_leaf_symlink(config: MemoryWikiConfig, relative_path: str) -> None:
+    normalized = normalize_relative_path(relative_path)
+    leaf = config.vault_path.resolve() / normalized
+    if leaf.is_symlink():
+        raise ValueError(f"refusing to write wiki source through symlink: {relative_path}")
