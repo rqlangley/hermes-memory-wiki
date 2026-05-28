@@ -89,7 +89,9 @@ def test_tool_schemas_are_strict_and_openclaw_compatible():
     assert tools["wiki_get"]["schema"]["properties"]["lineCount"]["minimum"] == 1
 
     apply_props = tools["wiki_apply"]["schema"]["properties"]
-    assert apply_props["op"]["enum"] == ["create_synthesis", "update_metadata"]
+    assert apply_props["op"]["enum"] == ["create_synthesis", "update_metadata", "upsert_entity", "upsert_concept"]
+    assert apply_props["entityType"] == {"type": "string"}
+    assert apply_props["aliases"] == {"type": "array", "items": {"type": "string"}}
     claim_schema = apply_props["claims"]["items"]
     assert claim_schema["required"] == ["text"]
     assert claim_schema["additionalProperties"] is False
@@ -365,6 +367,36 @@ def test_wiki_apply_handler_normalizes_and_calls_core(monkeypatch, tmp_path):
         "op": "create_synthesis",
         "compile": {"pageCounts": {"synthesis": 1}, "claimCount": 0, "updatedFiles": [], "updatedFileCount": 0},
     }
+
+
+def test_wiki_apply_handler_upserts_entity_and_includes_compile_summary(tmp_path):
+    vault = tmp_path / "vault"
+
+    payload = _payload(
+        _registered_tools()["wiki_apply"]["handler"](
+            {
+                "vaultPath": str(vault),
+                "op": "upsert_entity",
+                "title": "Alice Tool",
+                "entityType": "person",
+                "aliases": ["AT"],
+                "body": "Alice Tool is created through wiki_apply.",
+                "sourceIds": ["source.tool-test"],
+                "claims": [{"text": "Alice Tool has a structured claim."}],
+            }
+        )
+    )
+
+    assert "applied" in payload["text"].lower()
+    assert payload["details"]["path"] == "entities/alice-tool.md"
+    assert payload["details"]["id"] == "entity.alice-tool"
+    assert payload["details"]["created"] is True
+    assert payload["details"]["op"] == "upsert_entity"
+    assert payload["details"]["compile"]["pageCounts"]["entity"] == 1
+    assert payload["details"]["compile"]["claimCount"] == 1
+    assert (vault / "entities" / "alice-tool.md").is_file()
+    assert (vault / ".hermes-wiki" / "cache" / "agent-digest.json").is_file()
+
 
 
 def test_wiki_ingest_local_file_handler_initializes_ingests_and_compiles(monkeypatch, tmp_path):

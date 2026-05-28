@@ -76,13 +76,15 @@ def _tool_specs() -> list[JsonDict]:
         ),
         _spec(
             "wiki_apply",
-            "Apply a structured memory wiki mutation.",
+            "Apply a structured memory wiki mutation (create synthesis, update metadata, or typed entity/concept upsert).",
             _schema(
                 {
                     **_vault_path_property(),
-                    "op": {"type": "string", "enum": ["create_synthesis", "update_metadata"]},
+                    "op": {"type": "string", "enum": ["create_synthesis", "update_metadata", "upsert_entity", "upsert_concept"]},
                     "lookup": {"type": "string"},
                     "title": {"type": "string"},
+                    "entityType": {"type": "string"},
+                    "aliases": {"type": "array", "items": {"type": "string"}},
                     "body": {"type": "string"},
                     "sourceIds": {"type": "array", "items": {"type": "string"}},
                     "claims": {"type": "array", "items": _claim_schema()},
