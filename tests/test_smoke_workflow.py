@@ -7,12 +7,23 @@ from scripts.smoke_fake_hermes import run_smoke_workflow
 REQUIRED_STEPS = [
     "register",
     "wiki_init",
+    "write_source_page",
+    "write_entity_page",
+    "write_concept_page",
     "wiki_apply",
     "wiki_compile",
-    "wiki_reindex",
-    "wiki_search",
-    "wiki_get",
     "wiki_lint",
+    "wiki_reindex",
+    "search_entity_name",
+    "search_concept_name",
+    "search_alias",
+    "search_claim_text",
+    "get_by_id",
+    "get_by_path",
+    "get_by_title",
+    "get_by_alias",
+    "assert_generated_outputs",
+    "assert_no_structural_errors",
 ]
 
 
@@ -41,23 +52,75 @@ def test_fake_hermes_smoke_workflow_runs_offline(tmp_path):
             assert step["text"]
             assert isinstance(step["details"], dict)
 
-    reindex_step = next(step for step in steps if step["name"] == "wiki_reindex")
-    assert reindex_step["details"]["provider"] == "fake"
-    assert "offline smoke reindex stub used" in reindex_step["details"]["diagnostics"]
+    for write_step_name, expected_path in {
+        "write_source_page": "sources/openclaw-parity-notes.md",
+        "write_entity_page": "entities/ada-lovelace.md",
+        "write_concept_page": "concepts/analytical-engine.md",
+    }.items():
+        write_step = next(step for step in steps if step["name"] == write_step_name)
+        assert write_step["path"] == expected_path
 
-    search_step = next(step for step in steps if step["name"] == "wiki_search")
-    diagnostics = search_step["details"]["diagnostics"]
-    assert diagnostics["requestedMode"] == "hybrid"
-    assert diagnostics["effectiveMode"] in {"hybrid", "keyword"}
-    assert "offline smoke search provider used" in diagnostics["messages"]
-    assert search_step["details"]["results"]
+    apply_step = next(step for step in steps if step["name"] == "wiki_apply")
+    assert apply_step["details"]["path"] == "syntheses/openclaw-parity-synthesis.md"
 
-    get_step = next(step for step in steps if step["name"] == "wiki_get")
-    assert get_step["details"]["found"] is True
-    assert get_step["details"]["path"] == "syntheses/offline-smoke-synthesis.md"
+    compile_step = next(step for step in steps if step["name"] == "wiki_compile")
+    page_counts = compile_step["details"]["pageCounts"]
+    for kind in ("source", "entity", "concept", "synthesis"):
+        assert page_counts[kind] >= 1
+    assert compile_step["details"]["claimCount"] >= 3
 
     lint_step = next(step for step in steps if step["name"] == "wiki_lint")
-    assert "issueCount" in lint_step["details"]
+    assert lint_step["details"]["errorCount"] == 0
+
+    reindex_step = next(step for step in steps if step["name"] == "wiki_reindex")
+    assert reindex_step["details"]["provider"] == "fake"
+    assert reindex_step["details"]["embeddedCount"] > 0
+    assert "offline smoke reindex stub used" in reindex_step["details"]["diagnostics"]
+
+    expected_search_paths = {
+        "search_entity_name": "entities/ada-lovelace.md",
+        "search_concept_name": "concepts/analytical-engine.md",
+        "search_alias": "entities/ada-lovelace.md",
+        "search_claim_text": "concepts/analytical-engine.md",
+    }
+    for search_step_name, expected_path in expected_search_paths.items():
+        search_step = next(step for step in steps if step["name"] == search_step_name)
+        diagnostics = search_step["details"]["diagnostics"]
+        assert diagnostics["requestedMode"] == "hybrid"
+        assert diagnostics["effectiveMode"] in {"hybrid", "keyword"}
+        assert "offline smoke search provider used" in diagnostics["messages"]
+        assert any(result["path"] == expected_path for result in search_step["details"]["results"])
+
+    expected_gets = {
+        "get_by_id": ("entity.ada-lovelace", "entities/ada-lovelace.md"),
+        "get_by_path": ("concepts/analytical-engine.md", "concepts/analytical-engine.md"),
+        "get_by_title": ("OpenClaw Parity Synthesis", "syntheses/openclaw-parity-synthesis.md"),
+        "get_by_alias": ("Enchantress of Numbers", "entities/ada-lovelace.md"),
+    }
+    for get_step_name, (lookup, expected_path) in expected_gets.items():
+        get_step = next(step for step in steps if step["name"] == get_step_name)
+        assert get_step["lookup"] == lookup
+        assert get_step["details"]["found"] is True
+        assert get_step["details"]["path"] == expected_path
+
+    outputs_step = next(step for step in steps if step["name"] == "assert_generated_outputs")
+    assert set(outputs_step["files"]) >= {
+        "index.md",
+        "entities/index.md",
+        "concepts/index.md",
+        "syntheses/index.md",
+        "sources/index.md",
+        "reports/open-questions.md",
+        "reports/contradictions.md",
+        "reports/low-confidence.md",
+        "reports/claim-health.md",
+        ".hermes-wiki/cache/agent-digest.json",
+        ".hermes-wiki/cache/claims.jsonl",
+        ".hermes-wiki/cache/lint-report.json",
+    }
+
+    structural_step = next(step for step in steps if step["name"] == "assert_no_structural_errors")
+    assert structural_step["structuralErrors"] == []
 
     # The summary is meant for CLI/manual debugging and must remain JSON serializable.
     json.dumps(summary)
@@ -116,9 +179,9 @@ def test_fake_hermes_smoke_workflow_does_not_embed_with_existing_openai_index(tm
     assert summary["ok"] is True
     reindex_step = next(step for step in summary["steps"] if step["name"] == "wiki_reindex")
     assert reindex_step["details"]["provider"] == "fake"
-    search_step = next(step for step in summary["steps"] if step["name"] == "wiki_search")
+    assert reindex_step["details"]["embeddedCount"] > 0
+    search_step = next(step for step in summary["steps"] if step["name"] == "search_entity_name")
     diagnostics = search_step["details"]["diagnostics"]
     assert diagnostics["requestedMode"] == "hybrid"
-    assert diagnostics["effectiveMode"] == "keyword"
-    assert diagnostics["vectorAvailable"] is False
+    assert diagnostics["effectiveMode"] in {"hybrid", "keyword"}
     assert "offline smoke search provider used" in diagnostics["messages"]
