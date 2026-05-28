@@ -91,7 +91,7 @@ Supported OpenClaw-compatible fields are preserved by the parser and/or surfaced
 | `relationships` | list | entities | Relationships to other pages/entities. |
 | `bestUsedFor` | list | entities/concepts | Routing hints for when the page is useful. |
 | `notEnoughFor` | list | entities/concepts | Routing hints for when the page is insufficient. |
-| `sourceType` | string | source pages | Kind of source, e.g. note, document, URL, transcript. |
+| `sourceType` | string | source pages | Kind of source. `wiki_ingest` writes `local-file`, `conversation-summary`, or `text`; older/imported pages may preserve values such as note, document, URL, or transcript. |
 | `provenanceMode` | string | source pages | How the source path/provenance should be interpreted. |
 | `sourcePath` | string | source pages | Source file/path/URL reference. |
 | `bridgeRelativePath` | string | source pages | Compatibility provenance field preserved when present. |
@@ -213,6 +213,20 @@ status: active
 ---
 # Design Notes
 ```
+
+`wiki_ingest` is the supported deterministic path for new source pages. It writes managed source content under `sources/<slug>.md`, sets `pageType: source`, and records `sourceType` as one of `local-file`, `conversation-summary`, or `text`. Conversation summaries are source pages too: cite their returned IDs in `sourceIds` on entity, concept, or synthesis pages rather than treating the conversation as implicit evidence.
+
+## Tool authoring model
+
+The Hermes tool layer does not synthesize claims with hidden LLM calls. The agent/LLM chooses the content, claim text, confidence, and evidence references, then submits deterministic operations:
+
+- `wiki_ingest` for `local-file`, `conversation-summary`, and `text` sources.
+- `wiki_apply` `upsert_entity` for `entities/*.md` pages with `pageType: entity` and an `entityType`.
+- `wiki_apply` `upsert_concept` for `concepts/*.md` pages.
+- `wiki_apply` `create_synthesis` for cross-source synthesis pages.
+- `wiki_apply` `update_metadata` for structured metadata changes.
+
+There is intentionally no arbitrary freeform page-write tool. Use `wiki_get`/`wiki_search` before edits, preserve human notes outside managed blocks, then verify with `wiki_compile` and `wiki_lint`.
 
 ### Report page
 

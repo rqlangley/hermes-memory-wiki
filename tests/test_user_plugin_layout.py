@@ -36,6 +36,8 @@ EXPECTED_SCHEMA_PROPERTIES = {
         "op",
         "lookup",
         "title",
+        "entityType",
+        "aliases",
         "body",
         "sourceIds",
         "claims",

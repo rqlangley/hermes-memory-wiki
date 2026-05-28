@@ -17,6 +17,8 @@ Use `.venv/bin/python` for development commands after creating the environment; 
 - Do not add OpenClaw runtime dependencies.
 - Preserve the OpenClaw-compatible wiki schema documented in `docs/schema.md`: directory-derived broad page kinds, `pageType` matching those kinds, and entity subtypes in `entityType`.
 - Prefer deterministic, local behavior for development and tests. Network/API-backed behavior must be explicit opt-in.
+- Keep tool handlers deterministic. `wiki_ingest` and `wiki_apply` must not call an LLM; the agent supplies source summaries, claims, and citations explicitly.
+- Preserve the structured authoring boundary: `wiki_ingest` may create source pages from local files, conversation summaries, or text, and `wiki_apply` may perform only `create_synthesis`, `upsert_entity`, `upsert_concept`, or `update_metadata`. Do not add an arbitrary freeform page-write tool.
 - Keep documentation and code aligned with the current user-plugin limitations described in the installation and configuration guides.
 
 ## TDD expectations
