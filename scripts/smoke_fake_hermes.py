@@ -14,7 +14,7 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Iterator, Mapping
+from typing import Any, Iterator, Mapping, Sequence
 
 from hermes_memory_wiki import plugin, tools
 
@@ -33,11 +33,24 @@ class FakeContext:
         self.skills[name] = {"path": str(path), **kwargs}
 
 
-@contextmanager
-def _offline_reindex() -> Iterator[None]:
-    """Patch the tool-level reindex call so smoke runs without OpenAI/network."""
+class _OfflineSmokeEmbeddingProvider:
+    """Deterministic no-network embedding provider for smoke workflow search."""
 
-    original = tools.reindex_vault
+    provider = "offline-smoke"
+    model = "offline-smoke"
+    dimensions: int | None = 3
+
+    def embed_texts(self, texts: Sequence[str]) -> list[list[float]]:
+        return [[float(len(text) % 7), float(text.count(" ") + 1), 1.0] for text in texts]
+
+
+@contextmanager
+def _offline_tools() -> Iterator[None]:
+    """Patch tool-level embedding paths so smoke runs without OpenAI/network."""
+
+    original_reindex = tools.reindex_vault
+    original_search_wiki = tools.search_wiki
+    offline_provider = _OfflineSmokeEmbeddingProvider()
 
     def fake_reindex_vault(config: Any, *, force: bool = False) -> SimpleNamespace:
         return SimpleNamespace(
@@ -50,11 +63,22 @@ def _offline_reindex() -> Iterator[None]:
             diagnostics=["offline smoke reindex stub used", f"force={force}"],
         )
 
+    def offline_search_wiki(config: Any, query: str, **kwargs: Any) -> Any:
+        results, diagnostics = original_search_wiki(
+            config,
+            query,
+            **{**kwargs, "provider": offline_provider},
+        )
+        diagnostics.messages.append("offline smoke search provider used")
+        return results, diagnostics
+
     tools.reindex_vault = fake_reindex_vault
+    tools.search_wiki = offline_search_wiki
     try:
         yield
     finally:
-        tools.reindex_vault = original
+        tools.reindex_vault = original_reindex
+        tools.search_wiki = original_search_wiki
 
 
 def _decode_tool_response(raw: str) -> dict[str, Any]:
@@ -112,9 +136,9 @@ def _run(vault_path: Path) -> dict[str, Any]:
         )
     )
     steps.append(_call_tool(ctx, "wiki_compile", base_args))
-    with _offline_reindex():
+    with _offline_tools():
         steps.append(_call_tool(ctx, "wiki_reindex", {**base_args, "force": True}))
-    steps.append(_call_tool(ctx, "wiki_search", {**base_args, "query": "offline smoke", "searchMode": "hybrid"}))
+        steps.append(_call_tool(ctx, "wiki_search", {**base_args, "query": "offline smoke", "searchMode": "hybrid"}))
     steps.append(_call_tool(ctx, "wiki_get", {**base_args, "lookup": "synthesis.offline-smoke-synthesis"}))
     steps.append(_call_tool(ctx, "wiki_lint", base_args))
 
